@@ -17,9 +17,13 @@ We are all going to report our experiments and results on the Google Sheet [here
 
 ## Installation
 
+This codebase is tested with Python 3.
+
 1. Set up Ubuntu 16.04 (or higher) on a machine.
+2. Install Python 3.5 (or higher).
 2. Follow the installation instructions [here](https://www.tensorflow.org/install/install_linux#InstallingNativePip) to install TensorFlow.
-3. Execute `data/download_and_convert_cifar10.py` to generate the TFrecord files.
+3. Install keras using `pip3 install git+https://github.com/fchollet/keras.git`
+4. Execute `data/download_and_convert_cifar10.py` to generate the TFrecord files.
 
 ## Coding Standards
 We will use git for distributed version control. Feel free to submit pull requests with partial/incomplete work. This is research code, and so there are only two coding standards:
