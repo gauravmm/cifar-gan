@@ -5,6 +5,7 @@ import sys
 
 import numpy as np
 
+import config
 from typing import Tuple
 
 logger = logging.getLogger()
@@ -101,20 +102,27 @@ def dynLoadModule(pkg):
 def argparser():
     parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
 
-    parser.add_argument('--data', metavar='D', default="cifar10",
-        type=dynLoadModule("data"),
-        help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--preprocessing', nargs="*",
-        type=dynLoadModule("preprocessing"),
-        help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--generator', metavar='G', 
-        type=dynLoadModule("models"),
-        help='name of the module containing the generator model definition')
-    parser.add_argument('--discriminator', metavar='S',
-        type=dynLoadModule("models"),
-        help='name of the module containing the discrimintator model definition')
+    parser.add_argument('--preprocessor', nargs="*",
+        type=dynLoadModule("preprocessor"),
+        help='the name of files with image preprocessing instructions in the preprocessor package; may be applied in any order')
+    parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
+        help="the number of batches between reporting results and saving weights")
     parser.add_argument('--resume', action='store_const', const=True, default=False,
         help='attempt to load saved weights and continue training')
+
+    parser.add_argument('--data', metavar='D', default="cifar10",
+        type=dynLoadModule("data"),
+        help='the name of a file in the data package, used to specify the dataset loader')
+    parser.add_argument('--hyperparam', required=True,
+        type=dynLoadModule("hyperparam"),
+        help='the name of a hyperparameter definition file in the hyperparam package')
+    parser.add_argument('--generator', required=True, metavar='G', 
+        type=dynLoadModule("models"),
+        help='name of the file containing the generator model definition')
+    parser.add_argument('--discriminator', required=True, metavar='S',
+        type=dynLoadModule("models"),
+        help='name of the file containing the discrimintator model definition')
+    
     parser.add_argument("split", choices=["train", "test"])
 
     return parser

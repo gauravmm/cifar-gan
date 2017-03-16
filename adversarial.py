@@ -21,7 +21,7 @@ import numpy as np
 import png
 import support
 import tensorflow as tf
-from keras import layers, models, optimizers
+from keras import layers, models
 from keras_diagram import ascii
 
 #
@@ -40,21 +40,20 @@ logging.getLogger().addHandler(console)
 logger = logging.getLogger()
 
 
-# TODO: Abstract the optimizer and training parameters out, possibly into the model definition, possibly elsewhere
-optim = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in appendix A of DeepMind's AC-GAN paper
-# training params
-nb_steps = 10000
-batch_size = 128
-step_dis = 1  # number of discriminator network updates per step
-step_gen = 4  # number of generative network updates per step
-log_interval = 100  # interval (in steps) at which to log loss summaries & save plots of image samples to disc
-
-
 def main(args):
-    print(args)
+    """
+    Main class, does:
+      (1) Model building
+      (2) Loading
+      (3) Training
+    
+    args contains the commandline arguments, and the classes specified by commandline argument.
+    """
     logger.info("Loaded dataset      : \t{}".format(args.data.__file__))
     logger.info("Loaded generator    : \t{}".format(args.generator.__file__))
     logger.info("Loaded discriminator: \t{}".format(args.discriminator.__file__))
+    logger.info("Loaded hyperparameters: \t{}".format(args.hyperparam.__file__))
+    logger.info("Loaded preprocessors: \t{}".format(", ".join(a.__file__ for a in args.preprocessor)))
 
     img_dim = args.generator.IMAGE_DIM
 
@@ -74,20 +73,19 @@ def main(args):
 
     logger.info("Constructed computational graphs.")
 
-
     # Define and compile models
     gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
     dis_model = models.Model(input=dis_input, output=dis_output, name='discriminator')
     # We compose the discriminator onto the generator to produce the combined model:
     com_model = models.Model(input=gen_input, output=dis_model(gen_model(gen_input)), name='combined')
 
-    gen_model.compile(optimizer=optim, loss='binary_crossentropy')
-    dis_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
+    gen_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy')
+    dis_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
     dis_model.trainable = False 
-    com_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
+    com_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
 
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
@@ -133,22 +131,22 @@ def main(args):
     #
 
     # Create virual data
-    label_real = np.array([0] * batch_size) # Label to train discriminator on real data
-    label_fake = np.array([1] * batch_size) # Label to train discriminator on generated data
+    label_real = np.array([0] * args.hyperparam.batch_size) # Label to train discriminator on real data
+    label_fake = np.array([1] * args.hyperparam.batch_size) # Label to train discriminator on generated data
 
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
     intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
 
-    for batch in range(batch, nb_steps):
-        logger.debug('Step {} of {}.'.format(batch, nb_steps))
+    for batch in range(batch, args.hyperparam.halt_batches):
+        logger.debug('Step {} of {}.'.format(batch, args.hyperparam.halt_batches))
 
         # This training proceeds in two phases: (1) discriminator, then (2) generator.
         # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
         # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
         # distinguish between "fake"" (generated) and real images by running it on one step of each.
-        for _ in range(step_dis):
+        for _ in range(args.hyperparam.discriminator_per_step):
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
             batch_fake = gen_model.predict(next(rand_vec))
@@ -165,22 +163,22 @@ def main(args):
         # In this step, we train "generator" so that "discriminator(generator(random)) == real". Specifically, we compose
         # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
         # as real.
-        for _ in range(step_gen):
+        for _ in range(args.hyperparam.generator_per_step):
             intv_com_loss = np.add(intv_com_loss,
-                                   com_model.train_on_batch(next(rand_vec), y_real))
+                                   com_model.train_on_batch(next(rand_vec), label_real))
 
         # That is the entire training algorithm.
 
         # Produce output every interval:
-        if not batch % log_interval and i != 0:
-            logger.info("Logging at batch {}/{}".format(batch, nb_steps))
+        if not batch % args.log_interval and batch != 0:
+            logger.info("Completed batch {}/{}".format(batch, nb_steps))
 
-            # Compute and log loss
-            intv_com_loss /= log_interval * step_gen
-            intv_dis_loss_fake /= log_interval * step_dis
-            intv_dis_loss_real /= log_interval * step_dis
+            # Compute the average loss over this interval
+            intv_com_loss      /= args.log_interval * args.hyperparam.generator_per_step
+            intv_dis_loss_fake /= args.log_interval * args.hyperparam.discriminator_per_step
+            intv_dis_loss_real /= args.log_interval * args.hyperparam.discriminator_per_step
 
-            # log loss summary
+            # Log a summary
             logger.info('Generator loss: {}.'.format(intv_com_loss))
             logger.info('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake)
 
@@ -200,12 +198,12 @@ def main(args):
             # Write image
             img_fn = config.get_filename('image', args, batch)
             png.from_array(np.concatenate(gen_model.predict(next(rand_vec))), 'RGB').save(img_fn)
-            logger.info("Saved sample images to {}.".format(img_fn))
+            logger.debug("Saved sample images to {}.".format(img_fn))
 
             # Save weights
             gen_model.save_weights(config.get_filename('weight', args, 'gen', batch))
             dis_model.save_weights(config.get_filename('weight', args, 'dis', batch))
-            logger.info("Saved weights for batch {}.".format(batch))
+            logger.debug("Saved weights for batch {}.".format(batch))
 
 
 #

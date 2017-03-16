@@ -1,5 +1,7 @@
 # Configuration for adversarial trainer 
 
+LOG_INTERVAL_DEFAULT = 500
+
 PATH = {
     "__main__": os.path.dirname(os.path.abspath(__file__)),
     "weights" : "weights",
