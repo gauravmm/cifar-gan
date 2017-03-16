@@ -1,5 +1,9 @@
 # Data support functions
 
+import argparse
+import glob
+import importlib
+import itertools
 import logging
 import sys
 
@@ -18,8 +22,7 @@ logger = logging.getLogger()
 def data_stream(dataset, batch_size : int):
     # The first index of the next batch:
     i = 0 # Type: int
-    print(dataset.shape)
-
+    
     while True:
         j = i + batch_size
         # If we wrap around the back of the dataset:
@@ -56,7 +59,7 @@ def get_latest_blob(blob):
     rtrunc = -(len(blob) - ltrunc + 1) # Number of right characters to remove
     
     # Get the indices hidden behind the wildcard
-    idx = [int(b[ltrunc:rtrunc]) for b in blobs
+    idx = [int(b[ltrunc:rtrunc]) for b in blobs]
     return next(sorted(zip(idx, blobs), reverse=True))
 
 def resume(args, gen_model, dis_model):
@@ -73,7 +76,7 @@ def resume(args, gen_model, dis_model):
         dis_model.load_weights(dis_fn, by_name=True)
         logger.info("Loaded discriminator weights from {}".format(gen_fn))
         return gen_num
-    except Exception e:
+    except:
         logger.warn("Caught exception {}s".format(sys.exc_info()[0]))
         return None
 
@@ -85,8 +88,8 @@ def clear(args):
         os.remove(f)
     logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
 
-    with open(config.get_filename('csv', args), 'wb') as csvfile:
-        csvfile.write("time, batch, composite loss, discriminator+real loss, discriminator+fake loss\n")
+    with open(config.get_filename('csv', args), 'w') as csvfile:
+        print("time, batch, composite loss, discriminator+real loss, discriminator+fake loss", file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
     return 0
@@ -102,7 +105,7 @@ def dynLoadModule(pkg):
 def argparser():
     parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
 
-    parser.add_argument('--preprocessor', nargs="*",
+    parser.add_argument('--preprocessor', nargs="*", default=[],
         type=dynLoadModule("preprocessor"),
         help='the name of files with image preprocessing instructions in the preprocessor package; may be applied in any order')
     parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
@@ -110,16 +113,16 @@ def argparser():
     parser.add_argument('--resume', action='store_const', const=True, default=False,
         help='attempt to load saved weights and continue training')
 
-    parser.add_argument('--data', metavar='D', default="cifar10",
+    parser.add_argument('--data', default="cifar10",
         type=dynLoadModule("data"),
         help='the name of a file in the data package, used to specify the dataset loader')
-    parser.add_argument('--hyperparam', required=True,
+    parser.add_argument('--hyperparam', default="default",
         type=dynLoadModule("hyperparam"),
         help='the name of a hyperparameter definition file in the hyperparam package')
-    parser.add_argument('--generator', required=True, metavar='G', 
+    parser.add_argument('--generator', required=True, 
         type=dynLoadModule("models"),
         help='name of the file containing the generator model definition')
-    parser.add_argument('--discriminator', required=True, metavar='S',
+    parser.add_argument('--discriminator', required=True,
         type=dynLoadModule("models"),
         help='name of the file containing the discrimintator model definition')
     

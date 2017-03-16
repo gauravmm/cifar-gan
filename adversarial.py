@@ -7,10 +7,6 @@ Handles the loading of data from ./data, models from ./models, training, and tes
 Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox/
 """
 
-import argparse
-import glob
-import importlib
-import itertools
 import logging
 import os
 import sys
@@ -34,7 +30,7 @@ np.random.seed(54183)
 logging.basicConfig(filename=os.path.join(config.PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
-console.setLevel(logging.DEBUG)
+console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)s', datefmt='%H:%M:%S'))
 logging.getLogger().addHandler(console)
 logger = logging.getLogger()
@@ -106,7 +102,7 @@ def main(args):
 
     # Clear the files
     if batch is None:
-        support.clear()
+        batch = support.clear(args)
 
     assert batch is not None
     
@@ -118,11 +114,11 @@ def main(args):
     # TODO: Wrap the data source and transformations properly
     # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
     train_data, train_labels = args.data.get_data("train")
-    train_data = support.data_stream(train_data, batch_size)
+    train_data = support.data_stream(train_data, args.hyperparam.batch_size)
     # We don't need the labels for this:
     # train_labels = support.data_stream(train_labels, batch_size)
     # Random vector to feed generator:
-    rand_vec = support.random_stream(batch_size, args.generator.SEED_DIM)
+    rand_vec = support.random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
     logger.info("Data loaded from disk.")
 
 
@@ -149,13 +145,11 @@ def main(args):
         for _ in range(args.hyperparam.discriminator_per_step):
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            batch_fake = gen_model.predict(next(rand_vec))
             intv_dis_loss_fake = np.add(intv_dis_loss_fake,
-                                        dis_model.train_on_batch(generated_image_batch, label_fake))
+                                        dis_model.train_on_batch(gen_model.predict(next(rand_vec)), label_fake))
             # Use real images, and train the model to predict them as real.
-            batch_real = next(train_data)
             intv_dis_loss_real = np.add(intv_dis_loss_real,
-                                        dis_model.train_on_batch(real_image_batch, label_real))
+                                        dis_model.train_on_batch(next(train_data), label_real))
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
         # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
@@ -180,16 +174,16 @@ def main(args):
 
             # Log a summary
             logger.info('Generator loss: {}.'.format(intv_com_loss))
-            logger.info('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake)
+            logger.info('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake))
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
-                csvfile.write("{}s, {}d, {}f, {}f, {}f\n".format(
+                print("{}s, {}d, {}f, {}f, {}f".format(
                     datetime.isoformat(),
                     batch,
                     intv_com_loss,
                     intv_dis_loss_real,
-                    intv_dis_loss_fake))
+                    intv_dis_loss_fake), file=csvfile)
             
             intv_com_loss = 0
             intv_dis_loss_fake = 0

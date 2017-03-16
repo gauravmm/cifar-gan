@@ -1,5 +1,7 @@
 # Configuration for adversarial trainer 
 
+import os
+
 LOG_INTERVAL_DEFAULT = 500
 
 PATH = {
@@ -10,13 +12,13 @@ PATH = {
     "data"    : "data",
 }
 
-def _WEIGHT_FILENAME(g_name : str, d_name : str, typ="*" : str, step=None) -> str:
+def _WEIGHT_FILENAME(g_name : str, d_name : str, typ : str = "*", step=None) -> str:
     if step is not None:
         step = "{:06d}".format(step) # Pad with leading zeros
     else:
         step = "*"                   # Wildcard
     
-    return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}-{}.h5".format(g_name, d_name, typ, name, step))
+    return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}-{}.h5".format(g_name, d_name, typ, step))
 
 def _IMAGE_FILENAME(g_name : str, d_name : str, step="*") -> str:
     return os.path.join(PATH["weights"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
