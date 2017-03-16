@@ -7,13 +7,14 @@ Handles the loading of data from ./data, models from ./models, training, and tes
 Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox/
 """
 
+import itertools
 import logging
 import os
 import sys
-import config
 
 import numpy as np
 
+import config
 import png
 import support
 import tensorflow as tf
@@ -115,8 +116,7 @@ def main(args):
     # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
     train_data, train_labels = args.data.get_data("train")
     train_data = support.data_stream(train_data, args.hyperparam.batch_size)
-    # We don't need the labels for this:
-    # train_labels = support.data_stream(train_labels, batch_size)
+    
     # Random vector to feed generator:
     rand_vec = support.random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
     logger.info("Data loaded from disk.")
@@ -126,9 +126,12 @@ def main(args):
     # Training
     #
 
-    # Create virual data
-    label_real = np.array([0] * args.hyperparam.batch_size) # Label to train discriminator on real data
-    label_fake = np.array([1] * args.hyperparam.batch_size) # Label to train discriminator on generated data
+    # Prepare real and fake image generators
+    image_real = train_data
+    image_fake = itertools.imap(gen_model.predict, rand_vec)  # Fake images are made by running the generator on random data.
+
+    label_real = np.array([0] * args.hyperparam.batch_size)  # Label to train discriminator on real data
+    label_fake = np.array([1] * args.hyperparam.batch_size)  # Label to train discriminator on generated data
 
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
@@ -145,11 +148,9 @@ def main(args):
         for _ in range(args.hyperparam.discriminator_per_step):
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            intv_dis_loss_fake = np.add(intv_dis_loss_fake,
-                                        dis_model.train_on_batch(gen_model.predict(next(rand_vec)), label_fake))
+            intv_dis_loss_fake += dis_model.train_on_batch(next(image_fake), label_fake)
             # Use real images, and train the model to predict them as real.
-            intv_dis_loss_real = np.add(intv_dis_loss_real,
-                                        dis_model.train_on_batch(next(train_data), label_real))
+            intv_dis_loss_real += dis_model.train_on_batch(next(train_data), label_real)
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
         # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
@@ -185,9 +186,10 @@ def main(args):
                     intv_dis_loss_real,
                     intv_dis_loss_fake), file=csvfile)
             
-            intv_com_loss = 0
-            intv_dis_loss_fake = 0
-            intv_dis_loss_real = 0
+            # Zero out the running counters
+            intv_com_loss[...]      = 0
+            intv_dis_loss_fake[...] = 0
+            intv_dis_loss_real[...] = 0
 
             # Write image
             img_fn = config.get_filename('image', args, batch)
