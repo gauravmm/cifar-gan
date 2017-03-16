@@ -100,12 +100,20 @@ def main(args):
 
     batch = None
     if args.resume:
-        assert not "This feature is not implemented yet!"
-        # TODO: Implement resumed training, loading the file with the highest step number that matches the wildcard
-        # from WEIGHT_FILENAME().
-        support.get_latest_blob(config.get_filename('weight', args, 'gen'))
-        # gen_model.load_weights(path_to_data, by_name=True)
-        # dis_model.load_weights(path_to_data, by_name=True)
+        # Load files as necessary
+        gen_num, gen_fn  = support.get_latest_glob(config.get_filename('weight', args, 'gen'))
+        dis_num, dis_fn  = support.get_latest_glob(config.get_filename('weight', args, 'dis'))
+
+        # Check if the files are from the same batch.
+        assert gen_num == dis_num
+        
+        gen_model.load_weights(gen_fn, by_name=True)
+        logger.info("Loaded generator weights from {}".format(gen_fn))
+        dis_model.load_weights(dis_fn, by_name=True)
+        logger.info("Loaded discriminator weights from {}".format(gen_fn))
+        batch = gen_num
+
+        logger.debug("Resuming from batch {}d".format(batch))
     else:
         # Delete old weight checkpoints
         for f in itertools.chain(glob.glob(config.get_filename('weight', args)),
