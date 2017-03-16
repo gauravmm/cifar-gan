@@ -100,31 +100,15 @@ def main(args):
 
     batch = None
     if args.resume:
-        # Load files as necessary
-        gen_num, gen_fn  = support.get_latest_glob(config.get_filename('weight', args, 'gen'))
-        dis_num, dis_fn  = support.get_latest_glob(config.get_filename('weight', args, 'dis'))
+        batch = support.resume(args, gen_model, dis_model)
+        if batch:
+            logger.info("Resuming from batch {}d".format(batch))
+        else:
+            logger.warn("Could not resume training.".format(batch))
 
-        # Check if the files are from the same batch.
-        assert gen_num == dis_num
-        
-        gen_model.load_weights(gen_fn, by_name=True)
-        logger.info("Loaded generator weights from {}".format(gen_fn))
-        dis_model.load_weights(dis_fn, by_name=True)
-        logger.info("Loaded discriminator weights from {}".format(gen_fn))
-        batch = gen_num
-
-        logger.debug("Resuming from batch {}d".format(batch))
-    else:
-        # Delete old weight checkpoints
-        for f in itertools.chain(glob.glob(config.get_filename('weight', args)),
-                                 glob.glob(config.get_filename('image', args))):
-            logger.debug("Deleting file {}".format(f))
-            os.remove(f)
-        logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
-        batch = 0
-
-        with open(config.get_filename('csv', args), 'wb') as csvfile:
-            csvfile.write("time, batch, composite loss, discriminator+real loss, discriminator+fake loss\n")
+    # Clear the files
+    if batch is None:
+        support.clear()
 
     assert batch is not None
     
@@ -141,7 +125,7 @@ def main(args):
     # train_labels = support.data_stream(train_labels, batch_size)
     # Random vector to feed generator:
     rand_vec = support.random_stream(batch_size, args.generator.SEED_DIM)
-    logger.debug("Data loaded from disk.")
+    logger.info("Data loaded from disk.")
 
 
     #
@@ -158,7 +142,7 @@ def main(args):
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
 
     for batch in range(batch, nb_steps):
-        logger.info('Step {} of {}.'.format(batch, nb_steps))
+        logger.debug('Step {} of {}.'.format(batch, nb_steps))
 
         # This training proceeds in two phases: (1) discriminator, then (2) generator.
         # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
@@ -189,7 +173,7 @@ def main(args):
 
         # Produce output every interval:
         if not batch % log_interval and i != 0:
-            logger.debug("Logging at batch {}/{}".format(batch, nb_steps))
+            logger.info("Logging at batch {}/{}".format(batch, nb_steps))
 
             # Compute and log loss
             intv_com_loss /= log_interval * step_gen
@@ -197,8 +181,8 @@ def main(args):
             intv_dis_loss_real /= log_interval * step_dis
 
             # log loss summary
-            logger.debug('Generator loss: {}.'.format(intv_com_loss))
-            logger.debug('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake)
+            logger.info('Generator loss: {}.'.format(intv_com_loss))
+            logger.info('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake)
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
@@ -216,46 +200,20 @@ def main(args):
             # Write image
             img_fn = config.get_filename('image', args, batch)
             png.from_array(np.concatenate(gen_model.predict(next(rand_vec))), 'RGB').save(img_fn)
-            logger.debug("Saved sample images to {}.".format(img_fn))
+            logger.info("Saved sample images to {}.".format(img_fn))
 
             # Save weights
             gen_model.save_weights(config.get_filename('weight', args, 'gen', batch))
             dis_model.save_weights(config.get_filename('weight', args, 'dis', batch))
+            logger.info("Saved weights for batch {}.".format(batch))
+
 
 #
 # Command-line handlers
 #
 
 # TODO: Typecheck Args
-def dynLoadModule(pkg):
-    # Used to dynamically load modules in commandline options.
-    return lambda modname: importlib.import_module(pkg + "." + modname, package=".")
-
-def argparser():
-    parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
-
-    parser.add_argument('--data', metavar='D', default="cifar10",
-        type=dynLoadModule("data"),
-        help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--preprocessing', nargs="*",
-        type=dynLoadModule("preprocessing"),
-        help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--generator', metavar='G', 
-        type=dynLoadModule("models"),
-        help='name of the module containing the generator model definition')
-    parser.add_argument('--discriminator', metavar='S',
-        type=dynLoadModule("models"),
-        help='name of the module containing the discrimintator model definition')
-    parser.add_argument('--resume', action='store_const', const=True, default=False,
-        help='attempt to load saved weights and continue training')
-    parser.add_argument("split", choices=["train", "test"])
-
-    return parser
 
 if __name__ == '__main__':
     logger.info("Started")
-
-    
-    args = argparser().parse_args()
-
-    main(args)
+    main(support.argparser().parse_args())

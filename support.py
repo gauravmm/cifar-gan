@@ -1,9 +1,17 @@
 # Data support functions
 
+import logging
+import sys
+
 import numpy as np
 
 from typing import Tuple
 
+logger = logging.getLogger()
+
+#
+# Data
+#
 
 # TODO: Support randomization of input
 def data_stream(dataset, batch_size : int):
@@ -30,6 +38,10 @@ def random_stream(batch_size : int, img_size : Tuple[int, int, int]):
         yield np.random.normal(size=sz)
 
 
+#
+# Filesystem
+#
+
 def get_latest_blob(blob):
     """
     Returns the file that matches blob (with a single wildcard), that has the highest numeric value in the wildcard.
@@ -45,5 +57,64 @@ def get_latest_blob(blob):
     # Get the indices hidden behind the wildcard
     idx = [int(b[ltrunc:rtrunc]) for b in blobs
     return next(sorted(zip(idx, blobs), reverse=True))
-    
 
+def resume(args, gen_model, dis_model):
+    try:
+        # Load files as necessary
+        gen_num, gen_fn = get_latest_glob(config.get_filename('weight', args, 'gen'))
+        dis_num, dis_fn = get_latest_glob(config.get_filename('weight', args, 'dis'))
+
+        # Check if the files are from the same batch.
+        assert gen_num == dis_num
+        
+        gen_model.load_weights(gen_fn, by_name=True)
+        logger.info("Loaded generator weights from {}".format(gen_fn))
+        dis_model.load_weights(dis_fn, by_name=True)
+        logger.info("Loaded discriminator weights from {}".format(gen_fn))
+        return gen_num
+    except Exception e:
+        logger.warn("Caught exception {}s".format(sys.exc_info()[0]))
+        return None
+
+def clear(args):
+    # Delete old weight checkpoints
+    for f in itertools.chain(glob.glob(config.get_filename('weight', args)),
+                             glob.glob(config.get_filename('image',  args))):
+        logger.debug("Deleting file {}".format(f))
+        os.remove(f)
+    logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
+
+    with open(config.get_filename('csv', args), 'wb') as csvfile:
+        csvfile.write("time, batch, composite loss, discriminator+real loss, discriminator+fake loss\n")
+        logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
+
+    return 0
+
+#
+# CLI
+#
+
+def dynLoadModule(pkg):
+    # Used to dynamically load modules in commandline options.
+    return lambda modname: importlib.import_module(pkg + "." + modname, package=".")
+
+def argparser():
+    parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
+
+    parser.add_argument('--data', metavar='D', default="cifar10",
+        type=dynLoadModule("data"),
+        help='the name of a tf.slim dataset reader in the data package')
+    parser.add_argument('--preprocessing', nargs="*",
+        type=dynLoadModule("preprocessing"),
+        help='the name of a tf.slim dataset reader in the data package')
+    parser.add_argument('--generator', metavar='G', 
+        type=dynLoadModule("models"),
+        help='name of the module containing the generator model definition')
+    parser.add_argument('--discriminator', metavar='S',
+        type=dynLoadModule("models"),
+        help='name of the module containing the discrimintator model definition')
+    parser.add_argument('--resume', action='store_const', const=True, default=False,
+        help='attempt to load saved weights and continue training')
+    parser.add_argument("split", choices=["train", "test"])
+
+    return parser
