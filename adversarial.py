@@ -7,34 +7,48 @@ Handles the loading of data from ./data, models from ./models, training, and tes
 Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox/
 """
 
-import argparse, importlib, sys, os
+import argparse, importlib, sys, os, logging
+
+from keras import layers, optimizers
 
 #
 # Init
 #
 
-PATH = os.path.dirname(os.path.abspath(__file__))
-CACHE_DIR = os.path.join(PATH, '.cache')
+PATH = {
+    "__main__": os.path.dirname(os.path.abspath(__file__)),
+    "weights" : "weights",
+    "logs"    : "train_logs",
+    "cache"   : ".cache"
+}
+
+logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.INFO, format='[%(asctime)s, %(levelname)s] %(message)s')
+# Logger
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)s', datefmt='%H:%M:%S'))
+logging.getLogger().addHandler(console)
+logger = logging.getLogger()
 
 
 def main(args):
     print(args)
+    logger.info("Loaded dataset      : \t{}".format(args.data.__file__))
+    logger.info("Loaded generator    : \t{}".format(args.generator.__file__))
+    logger.info("Loaded discriminator: \t{}".format(args.discriminator.__file__))
 
-
-def adversarial_training(data_dir, generator_model_path, discriminator_model_path):
-    """
-    Adversarial training of the generator network Gθ and discriminator network Dφ.
-
-    """
-    #
-    # define model input and output tensors
-    #
-
-    generator_input_tensor = layers.Input(shape=(rand_dim,))
-    generated_image_tensor = generator_network(generator_input_tensor)
+    # Input/output tensors:
+    gen_input  = layers.Input(shape=(args.generator.SEED_DIM,))
+    gen_output = generator_network(generator_input_tensor)
 
     generated_or_real_image_tensor = layers.Input(shape=(img_height, img_width, img_channels))
     discriminator_output = discriminator_network(generated_or_real_image_tensor)
+
+
+def adversarial_training(data_dir, generator_model_path, discriminator_model_path):
+    #
+    # define model input and output tensors
+    #
 
     #
     # define models
@@ -157,25 +171,37 @@ def adversarial_training(data_dir, generator_model_path, discriminator_model_pat
 # Command-line handlers
 #
 
+# TODO: Typecheck Args
 def dynLoadModule(pkg):
     # Used to dynamically load modules in commandline options.
     return lambda modname: importlib.import_module(pkg + "." + modname, package=".")
 
-if __name__ == '__main__':
+def argparser():
     parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
 
     parser_g1 = parser.add_mutually_exclusive_group(required=True)
     parser_g1.add_argument('--train', action='store_const', dest='split', const='train', default='')
     parser_g1.add_argument('--test', action='store_const', dest='split', const='test', default='')
 
-    parser.add_argument('--data', metavar='D', default="cifar10", type=dynLoadModule("data"),
-                    help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--preprocessing', metavar='D', default="default", type=dynLoadModule("preprocessing"),
-                    help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--generator', metavar='G', type=dynLoadModule("models"),
-                    help='name of the module containing the generator model definition')
-    parser.add_argument('--discriminator', metavar='S', type=dynLoadModule("models"),
-                    help='name of the module containing the discrimintator model definition')
-    args = parser.parse_args()
+    parser.add_argument('--data', metavar='D', default="cifar10",
+        type=dynLoadModule("data"),
+        help='the name of a tf.slim dataset reader in the data package')
+    parser.add_argument('--preprocessing', metavar='D', default="default",
+        type=dynLoadModule("preprocessing"),
+        help='the name of a tf.slim dataset reader in the data package')
+    parser.add_argument('--generator', metavar='G', 
+        type=dynLoadModule("models"),
+        help='name of the module containing the generator model definition')
+    parser.add_argument('--discriminator', metavar='S',
+        type=dynLoadModule("models"),
+        help='name of the module containing the discrimintator model definition')
+
+    return parser
+
+if __name__ == '__main__':
+    logger.info("Started")
+
+    
+    args = argparser().parse_args()
 
     main(args)

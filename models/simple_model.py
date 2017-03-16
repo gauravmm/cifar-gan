@@ -4,26 +4,7 @@ A simple model, containing both generator and discriminator.
 from keras import layers, models
 
 #
-# Constants needed by the generator:
-#
-
-# Name of generator
-NAME="Simple"
-# Size of random seed used by the generator's input tensor:
-GENERATOR_SEED_DIM = 112 
-
-#
-# Constants needed by the discriminator:
-#
-
-# Name of discriminator
-# Each generator/discriminator needs a name if they are in different files
-# NAME="Simple"
-
-
-
-#
-# params
+# Params
 #
 
 # dimensions
@@ -41,6 +22,15 @@ batch_size = 128
 k_d = 1  # number of discriminator network updates per step
 k_g = 2  # number of generative network updates per step
 log_interval = 100  # interval (in steps) at which to log loss summaries & save plots of image samples to disc
+
+#
+# GENERATOR
+#
+
+# Name of generator
+NAME="Simple"
+# Size of random seed used by the generator's input tensor:
+SEED_DIM = 112 
 
 # TODO: Documentation
 def generator(input_tensor):
@@ -86,7 +76,15 @@ def generator(input_tensor):
                                                 border_mode='same',
                                                 output_shape=(None, img_height, img_width, img_channels))(x)
 
-# TODO: Documentation
+
+#
+# DISCRIMINATOR
+#
+
+# Name of discriminator
+# Each generator/discriminator needs a name if they are in different files
+# NAME="Simple"
+
 def discriminator(x):
     def add_common_layers(y):
         y = layers.advanced_activations.LeakyReLU()(y)
