@@ -17,12 +17,15 @@ import sys
 
 import support
 import tensorflow as tf
+import numpy as np
 from keras import layers, models, optimizers
 from keras_diagram import ascii
 
 #
 # Init
 #
+
+np.random.seed(54183)
 
 PATH = {
     "__main__": os.path.dirname(os.path.abspath(__file__)),
@@ -53,8 +56,8 @@ optim = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in 
 # training params
 nb_steps = 10000
 batch_size = 128
-k_d = 1  # number of discriminator network updates per step
-k_g = 2  # number of generative network updates per step
+step_dis = 1  # number of discriminator network updates per step
+step_gen = 4  # number of generative network updates per step
 log_interval = 100  # interval (in steps) at which to log loss summaries & save plots of image samples to disc
 
 
@@ -91,13 +94,11 @@ def main(args):
 
     gen_model.compile(optimizer=optim, loss='binary_crossentropy')
     dis_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
-    dis_model.trainable = False # TODO: I don't understand why this is set.
+    # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
+    # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
+    # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
+    dis_model.trainable = False 
     com_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
-
-    # Loss value for training
-    com_loss = np.zeros(shape=len(com_model.metrics_names))
-    dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
-    dis_loss_fake = np.copy(dis_loss_real)
 
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
@@ -134,41 +135,58 @@ def main(args):
     # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
     train_data, train_labels = args.data.get_data("train")
     train_data = support.data_stream(train_data, batch_size)
-    train_labels = support.data_stream(train_labels, batch_size)
+    # We don't need the labels for this:
+    # train_labels = support.data_stream(train_labels, batch_size)
+    # Random vector to feed generator:
+    rand_vec = support.random_stream(batch_size, args.generator.SEED_DIM)
+    logger.debug("Data loaded from disk.")
 
-    # Create virual data
-    label_real = np.array([0] * batch_size) # Label to train discriminator on real data
-    label_fake = np.array([1] * batch_size) # Label to train discriminator on generated data
 
     #
     # Training
     #
 
+    # Create virual data
+    label_real = np.array([0] * batch_size) # Label to train discriminator on real data
+    label_fake = np.array([1] * batch_size) # Label to train discriminator on generated data
+
+    # Loss value in the current log interval:
+    intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
+    intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
+    intv_dis_loss_fake = np.copy(intv_dis_loss_real)
+
     for i in range(nb_steps):
-        print('Step: {} of {}.'.format(i, nb_steps))
+        logger.debug('Step: {} of {}.'.format(i, nb_steps))
 
-        # train the discriminator
-        for _ in range(k_d):
-            generator_input = np.random.normal(size=(batch_size, rand_dim))
-            # sample a mini-batch of real images
-            real_image_batch = get_image_batch()
+        # This training proceeds in two phases: (1) discriminator, then (2) generator.
+        # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
+        # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
+        # distinguish between "fake"" (generated) and real images by running it on one step of each.
+        for _ in range(step_dis):
+            # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
+            # fake images separately from real images.
+            batch_fake = gen_model.predict(rand_vec.next())
+            intv_dis_loss_fake = np.add(intv_dis_loss_fake,
+                                        dis_model.train_on_batch(generated_image_batch, label_fake))
+            # Use real images, and train the model to predict them as real.
+            batch_real = train_data.next()
+            intv_dis_loss_real = np.add(intv_dis_loss_real,
+                                        dis_model.train_on_batch(real_image_batch, label_real))
 
-            # generate a batch of images with the current generator
-            generated_image_batch = generator_model.predict(generator_input)
+        # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
+        # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
+        # the only weights updated in this step.
+        # In this step, we train "generator" so that "discriminator(generator(random)) == real". Specifically, we compose
+        # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
+        # as real.
+        for _ in range(step_gen):
+            intv_com_loss = np.add(intv_com_loss,
+                                   com_model.train_on_batch(rand_vec.next(), y_real))
 
-            # update φ by taking an SGD step on mini-batch loss LD(φ)
-            disc_loss_real = np.add(discriminator_model.train_on_batch(real_image_batch, y_real), disc_loss_real)
-            disc_loss_generated = np.add(discriminator_model.train_on_batch(generated_image_batch, y_generated),
-                                         disc_loss_generated)
+        # That is the entire training algorithm.
 
-        # train the generator
-        for _ in range(k_g * 2):
-            generator_input = np.random.normal(size=(batch_size, rand_dim))
-
-            # update θ by taking an SGD step on mini-batch loss LR(θ)
-            combined_loss = np.add(combined_model.train_on_batch(generator_input, y_real), combined_loss)
-
-        if not i % log_interval and i != 0:
+        # Produce output every interval:
+        if False: # not i % log_interval and i != 0:
             # plot batch of generated images w/ current generator
             figure_name = 'generated_image_batch_step_{}.png'.format(i)
             print('Saving batch of generated images at adversarial step: {}.'.format(i))
@@ -181,9 +199,9 @@ def main(args):
                                                  label_batch=['generated'] * batch_size + ['real'] * batch_size)
 
             # log loss summary
-            print('Generator model loss: {}.'.format(combined_loss / (log_interval * k_g * 2)))
-            print('Discriminator model loss real: {}.'.format(disc_loss_real / (log_interval * k_d * 2)))
-            print('Discriminator model loss generated: {}.'.format(disc_loss_generated / (log_interval * k_d * 2)))
+            print('Generator model loss: {}.'.format(combined_loss / (log_interval * step_gen)))
+            print('Discriminator model loss real: {}.'.format(disc_loss_real / (log_interval * step_dis * 2)))
+            print('Discriminator model loss generated: {}.'.format(disc_loss_generated / (log_interval * step_dis * 2)))
 
             combined_loss = np.zeros(shape=len(combined_model.metrics_names))
             disc_loss_real = np.zeros(shape=len(discriminator_model.metrics_names))

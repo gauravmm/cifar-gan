@@ -1,5 +1,7 @@
 # Data support functions
 
+from typing import Tuple
+
 # TODO: Support randomization of input
 def data_stream(dataset, batch_size : int):
     # The first index of the next batch:
@@ -17,3 +19,9 @@ def data_stream(dataset, batch_size : int):
             yield dataset[i:j,...]
             i = j
     return data_gen
+
+# Stream of random data
+def random_stream(batch_size : int, img_size : Tuple[int, int, int]):
+    sz = [batch_size, *img_size]
+    while True:
+        yield np.random.normal(size=sz)

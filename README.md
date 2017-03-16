@@ -20,7 +20,7 @@ We are all going to report our experiments and results on the Google Sheet [here
 This codebase is targeted at Python 3.5
 
 1. Set up Ubuntu 16.04 (or higher) on a machine.
-2. Run `sudo apt install pandoc`
+2. Install the latest version of `numpy` and `pandoc` using your package manager.
 3. Follow the installation instructions [here](https://www.tensorflow.org/install/install_linux#InstallingNativePip) to install TensorFlow.
 4. Install prerequisites using `pip3 install mypy-lang pypandoc git+https://github.com/fchollet/keras.git keras-diagram`
 
