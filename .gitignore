@@ -3,6 +3,7 @@ data/*.tfrecord
 data/labels.txt
 train_logs/**/*
 .vscode/**
+weights/**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

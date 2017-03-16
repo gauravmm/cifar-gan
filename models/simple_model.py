@@ -1,11 +1,113 @@
 """
 A simple model, containing both generator and discriminator.
 """
+from keras import layers, models
 
+#
+# Constants needed by the generator:
+#
+
+# Name of generator
 NAME="Simple"
+# Size of random seed used by the generator's input tensor:
+GENERATOR_SEED_DIM = 112 
 
-def generator(input_layer):
-    pass
+#
+# Constants needed by the discriminator:
+#
 
-def discriminator(input_layer):
-    pass
+# Name of discriminator
+# Each generator/discriminator needs a name if they are in different files
+# NAME="Simple"
+
+
+
+#
+# params
+#
+
+# dimensions
+img_height = 112
+img_width = 112
+img_channels = 3
+
+# shared network params
+kernel_size = (3, 3)
+conv_layer_keyword_args = {'border_mode': 'same', 'subsample': (2, 2)}
+
+# training params
+nb_steps = 10000
+batch_size = 128
+k_d = 1  # number of discriminator network updates per step
+k_g = 2  # number of generative network updates per step
+log_interval = 100  # interval (in steps) at which to log loss summaries & save plots of image samples to disc
+
+# TODO: Documentation
+def generator(input_tensor):
+    def add_common_layers(y):
+        y = layers.Activation('relu')(y)
+        return y
+
+    #
+    # input dimensions to the first conv layer in the generator
+    #
+
+    height_dim = 7
+    width_dim = 7
+    assert img_height % height_dim == 0 and img_width % width_dim == 0, \
+        'Generator network must be able to transform `x` into a tensor of shape (img_height, img_width, img_channels).'
+
+    # 7 * 7 * 16 == 784 input neurons
+    x = layers.Dense(height_dim * width_dim * 16)(input_tensor)
+    x = add_common_layers(x)
+
+    x = layers.Reshape((height_dim, width_dim, -1))(x)
+
+    # generator will transform `x` into a tensor w/ the desired shape by up-sampling the spatial dimension of `x`
+    # through a series of strided de-convolutions (each de-conv layer up-samples spatial dim of `x` by a factor of 2).
+    while height_dim != img_height:
+        # spatial dim: (14 => 28 => 56 => 112 == img_height == img_width)
+        height_dim *= 2
+        width_dim *= 2
+
+        # nb_feature_maps: (512 => 256 => 128 => 64)
+        try:
+            nb_feature_maps //= 2
+        except NameError:
+            nb_feature_maps = 512
+
+        x = layers.convolutional.Deconvolution2D(nb_feature_maps, *kernel_size,
+                                                 output_shape=(None, height_dim, width_dim, nb_feature_maps),
+                                                 **conv_layer_keyword_args)(x)
+        x = add_common_layers(x)
+
+    # number of feature maps => number of image channels
+    return layers.convolutional.Deconvolution2D(img_channels, 1, 1, activation='tanh',
+                                                border_mode='same',
+                                                output_shape=(None, img_height, img_width, img_channels))(x)
+
+# TODO: Documentation
+def discriminator(x):
+    def add_common_layers(y):
+        y = layers.advanced_activations.LeakyReLU()(y)
+        return y
+
+    height_dim = 7
+
+    # down sample with strided convolutions until we reach the desired spatial dimension (7 * 7 * nb_feature_maps)
+    while x.get_shape()[1] != height_dim:
+        # nb_feature_maps: (64 => 128 => 256 => 512)
+        try:
+            nb_feature_maps *= 2
+        except NameError:
+            nb_feature_maps = 64
+
+        x = layers.convolutional.Convolution2D(nb_feature_maps, *kernel_size, **conv_layer_keyword_args)(x)
+        x = add_common_layers(x)
+
+    x = layers.Flatten()(x)
+
+    x = layers.Dense(16)(x)
+    x = add_common_layers(x)
+
+    return layers.Dense(1, activation='sigmoid')(x)
