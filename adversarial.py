@@ -9,7 +9,8 @@ Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox
 
 import argparse, importlib, sys, os, logging
 
-from keras import layers, optimizers
+from keras import layers, models, optimizers
+from keras_diagram import ascii
 
 #
 # Init
@@ -25,7 +26,7 @@ PATH = {
 def WEIGHT_FILENAME(typ : str, name : str, step : int) -> str:
     return os.join(PATH["weights"], "checkpoint-{}-{}-{0:06d}".format(typ, name, step))
 
-logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.INFO, format='[%(asctime)s, %(levelname)s] %(message)s')
+logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
@@ -42,6 +43,10 @@ def main(args):
 
     img_dim = args.generator.IMAGE_DIM
 
+
+    # TODO: Update calls to Keras 2 API to remove warnings. We may have to restructure the code accordingly
+    # See use of new API here: https://github.com/fchollet/keras/blob/master/examples/cifar10_cnn.py
+
     # Input/output tensors:
     gen_input  = layers.Input(shape=args.generator.SEED_DIM)
     gen_output = args.generator.generator(gen_input, img_dim)
@@ -50,8 +55,10 @@ def main(args):
 
     logger.info("Constructed computational graphs.")
 
+
     # TODO: Abstract the optimizer settings out, possibly into the generator and discriminator definitions
     optim = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in appendix A of DeepMind's AC-GAN paper
+
 
     # Define and compile models
     gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
@@ -65,8 +72,11 @@ def main(args):
     com_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
 
     logger.info("Compiled models.")
-    logger.info(gen_model.summary())
-    logger.info(gen_model.summary())
+    logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
+    logger.debug("Discriminative model structure:\n{}".format(ascii(dis_model)))
+    
+
+    #
 
 
 def adversarial_training(data_dir, generator_model_path, discriminator_model_path):

@@ -4,6 +4,8 @@ A simple model, containing both generator and discriminator.
 from keras import layers, models
 from typing import Tuple
 
+# TODO: Update calls to Keras 2 API to remove warnings
+
 #
 # Params
 #
@@ -72,13 +74,13 @@ def generator(input_tensor : layers.Input, input_size : Tuple[int, int, int]) ->
         except NameError:
             nb_feature_maps = 512
 
-        x = layers.convolutional.Deconvolution2D(nb_feature_maps, *kernel_size,
+        x = layers.convolutional.Conv2DTranspose(nb_feature_maps, *kernel_size,
                                                  output_shape=(None, height_dim, width_dim, nb_feature_maps),
                                                  **conv_layer_keyword_args)(x)
         x = add_common_layers(x)
 
     # number of feature maps => number of image channels
-    return layers.convolutional.Deconvolution2D(img_channels, 1, 1, activation='tanh',
+    return layers.convolutional.Conv2DTranspose(img_channels, 1, 1, activation='tanh',
                                                 border_mode='same',
                                                 output_shape=(None, img_height, img_width, img_channels))(x)
 
@@ -100,9 +102,9 @@ def discriminator(x, input_size):
         y = layers.advanced_activations.LeakyReLU()(y)
         return y
 
-    height_dim = 7
+    height_dim = 4
 
-    # down sample with strided convolutions until we reach the desired spatial dimension (7 * 7 * nb_feature_maps)
+    # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * nb_feature_maps)
     while x.get_shape()[1] != height_dim:
         # nb_feature_maps: (64 => 128 => 256 => 512)
         try:
@@ -110,7 +112,7 @@ def discriminator(x, input_size):
         except NameError:
             nb_feature_maps = 64
 
-        x = layers.convolutional.Convolution2D(nb_feature_maps, *kernel_size, **conv_layer_keyword_args)(x)
+        x = layers.convolutional.Conv2D(nb_feature_maps, *kernel_size, **conv_layer_keyword_args)(x)
         x = add_common_layers(x)
 
     x = layers.Flatten()(x)
