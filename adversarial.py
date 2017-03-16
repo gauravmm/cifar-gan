@@ -7,7 +7,13 @@ Handles the loading of data from ./data, models from ./models, training, and tes
 Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox/
 """
 
-import argparse, importlib, sys, os, logging
+import argparse
+import glob
+import importlib
+import itertools
+import logging
+import os
+import sys
 
 from keras import layers, models, optimizers
 from keras_diagram import ascii
@@ -23,8 +29,13 @@ PATH = {
     "cache"   : ".cache",
     "data"    : "data",
 }
-def WEIGHT_FILENAME(typ : str, name : str, step : int) -> str:
-    return os.join(PATH["weights"], "checkpoint-{}-{}-{0:06d}".format(typ, name, step))
+def WEIGHT_FILENAME(typ : str, name : str, step=None) -> str:
+    if step is not None:
+        step = "{:06d}".format(step) # Pad with leading zeros
+    else:
+        step = "*"                   # Wildcard
+    
+    return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}".format(typ, name, step))
 
 logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
@@ -33,6 +44,16 @@ console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)s', datefmt='%H:%M:%S'))
 logging.getLogger().addHandler(console)
 logger = logging.getLogger()
+
+
+# TODO: Abstract the optimizer and training parameters out, possibly into the model definition, possibly elsewhere
+optim = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in appendix A of DeepMind's AC-GAN paper
+# training params
+nb_steps = 10000
+batch_size = 128
+k_d = 1  # number of discriminator network updates per step
+k_g = 2  # number of generative network updates per step
+log_interval = 100  # interval (in steps) at which to log loss summaries & save plots of image samples to disc
 
 
 def main(args):
@@ -56,10 +77,6 @@ def main(args):
     logger.info("Constructed computational graphs.")
 
 
-    # TODO: Abstract the optimizer settings out, possibly into the generator and discriminator definitions
-    optim = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in appendix A of DeepMind's AC-GAN paper
-
-
     # Define and compile models
     gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
     dis_model = models.Model(input=dis_input, output=dis_output, name='discriminator')
@@ -74,9 +91,23 @@ def main(args):
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
     logger.debug("Discriminative model structure:\n{}".format(ascii(dis_model)))
-    
 
-    #
+    # Load weights if necessary
+    if args.resume:
+        assert not "This feature is not implemented yet!"
+        # TODO: Implement resumed training, loading the file with the highest step number that matches the wildcard
+        # from WEIGHT_FILENAME().
+        # gen_model.load_weights(path_to_data, by_name=True)
+        # dis_model.load_weights(path_to_data, by_name=True)
+    else:
+        # Delete old weight checkpoints
+        for f in itertools.chain(glob.glob(WEIGHT_FILENAME("gen", args.generator.NAME)),
+                                 glob.glob(WEIGHT_FILENAME("dis", args.discriminator.NAME))):
+            logger.debug("Delete weight file {}".format(f))
+            os.remove(f)
+        logger.info("Deleted all saved weights for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
+
+
 
 
 def adversarial_training(data_dir, generator_model_path, discriminator_model_path):
@@ -116,10 +147,6 @@ def adversarial_training(data_dir, generator_model_path, discriminator_model_pat
     disc_loss_real = np.zeros(shape=len(discriminator_model.metrics_names))
     disc_loss_generated = np.zeros(shape=len(discriminator_model.metrics_names))
 
-    if generator_model_path:
-        generator_model.load_weights(generator_model_path, by_name=True)
-    if discriminator_model_path:
-        discriminator_model.load_weights(discriminator_model_path, by_name=True)
 
     for i in range(nb_steps):
         print('Step: {} of {}.'.format(i, nb_steps))
@@ -200,6 +227,8 @@ def argparser():
     parser.add_argument('--discriminator', metavar='S',
         type=dynLoadModule("models"),
         help='name of the module containing the discrimintator model definition')
+    parser.add_argument('--resume', action='store_const', const=True, default=False,
+        help='attempt to load saved weights and continue training')
 
     return parser
 

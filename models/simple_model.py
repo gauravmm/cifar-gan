@@ -10,21 +10,9 @@ from typing import Tuple
 # Params
 #
 
-# dimensions
-img_height = 112
-img_width = 112
-img_channels = 3
-
 # shared network params
 kernel_size = (3, 3)
 conv_layer_keyword_args = {'border_mode': 'same', 'subsample': (2, 2)}
-
-# training params
-nb_steps = 10000
-batch_size = 128
-k_d = 1  # number of discriminator network updates per step
-k_g = 2  # number of generative network updates per step
-log_interval = 100  # interval (in steps) at which to log loss summaries & save plots of image samples to disc
 
 #
 # GENERATOR
