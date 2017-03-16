@@ -15,9 +15,11 @@ import logging
 import os
 import sys
 
+import numpy as np
+
+import png
 import support
 import tensorflow as tf
-import numpy as np
 from keras import layers, models, optimizers
 from keras_diagram import ascii
 
@@ -34,18 +36,26 @@ PATH = {
     "cache"   : ".cache",
     "data"    : "data",
 }
-def WEIGHT_FILENAME(typ : str, name : str, step=None) -> str:
+
+def WEIGHT_FILENAME(g_name : str, d_name : str, typ : str, step=None) -> str:
     if step is not None:
         step = "{:06d}".format(step) # Pad with leading zeros
     else:
         step = "*"                   # Wildcard
     
-    return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}".format(typ, name, step))
+    return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}-{}.h5".format(g_name, d_name, typ, name, step))
 
+def IMAGE_FILENAME(g_name : str, d_name : str, step="*") -> str:
+    return os.path.join(PATH["weights"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
+
+def CSV_FILENAME(g_name : str, d_name : str) -> str:
+    return os.path.join(PATH["weights"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
+
+# Logging
 logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
-console.setLevel(logging.INFO)
+console.setLevel(logging.DEBUG)
 console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)s', datefmt='%H:%M:%S'))
 logging.getLogger().addHandler(console)
 logger = logging.getLogger()
@@ -119,11 +129,17 @@ def main(args):
     else:
         # Delete old weight checkpoints
         for f in itertools.chain(glob.glob(WEIGHT_FILENAME("gen", args.generator.NAME)),
-                                 glob.glob(WEIGHT_FILENAME("dis", args.discriminator.NAME))):
-            logger.debug("Deleting weight file {}".format(f))
+                                 glob.glob(WEIGHT_FILENAME("dis", args.discriminator.NAME)),
+                                 glob.glob(IMAGE_FILENAME(args.generator.NAME, args.discriminator.NAME))
+                                 ):
+            logger.debug("Deleting file {}".format(f))
             os.remove(f)
-        logger.info("Deleted all saved weights for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
+        logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
         batch = 0
+
+        with open(CSV_FILENAME(args.generator.NAME, args.discriminator.NAME), 'wb') as csvfile:
+            csvfile.write("time, batch, composite loss, discriminator+real loss, discriminator+fake loss\n")
+
     assert batch is not None
     
 
@@ -155,8 +171,8 @@ def main(args):
     intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
 
-    for i in range(nb_steps):
-        logger.debug('Step: {} of {}.'.format(i, nb_steps))
+    for batch in range(batch, nb_steps):
+        logger.info('Step {} of {}.'.format(batch, nb_steps))
 
         # This training proceeds in two phases: (1) discriminator, then (2) generator.
         # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
@@ -165,11 +181,11 @@ def main(args):
         for _ in range(step_dis):
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            batch_fake = gen_model.predict(rand_vec.next())
+            batch_fake = gen_model.predict(next(rand_vec))
             intv_dis_loss_fake = np.add(intv_dis_loss_fake,
                                         dis_model.train_on_batch(generated_image_batch, label_fake))
             # Use real images, and train the model to predict them as real.
-            batch_real = train_data.next()
+            batch_real = next(train_data)
             intv_dis_loss_real = np.add(intv_dis_loss_real,
                                         dis_model.train_on_batch(real_image_batch, label_real))
 
@@ -181,37 +197,44 @@ def main(args):
         # as real.
         for _ in range(step_gen):
             intv_com_loss = np.add(intv_com_loss,
-                                   com_model.train_on_batch(rand_vec.next(), y_real))
+                                   com_model.train_on_batch(next(rand_vec), y_real))
 
         # That is the entire training algorithm.
 
         # Produce output every interval:
-        if False: # not i % log_interval and i != 0:
-            # plot batch of generated images w/ current generator
-            figure_name = 'generated_image_batch_step_{}.png'.format(i)
-            print('Saving batch of generated images at adversarial step: {}.'.format(i))
+        if not batch % log_interval and i != 0:
+            logger.debug("Logging at batch {}/{}".format(batch, nb_steps))
 
-            generated_image_batch = generator_model.predict(np.random.normal(size=(batch_size, rand_dim)))
-            real_image_batch = get_image_batch()
-
-            plot_image_batch_w_labels.plot_batch(np.concatenate((generated_image_batch, real_image_batch)),
-                                                 os.path.join(cache_dir, figure_name),
-                                                 label_batch=['generated'] * batch_size + ['real'] * batch_size)
+            # Compute and log loss
+            intv_com_loss /= log_interval * step_gen
+            intv_dis_loss_fake /= log_interval * step_dis
+            intv_dis_loss_real /= log_interval * step_dis
 
             # log loss summary
-            print('Generator model loss: {}.'.format(combined_loss / (log_interval * step_gen)))
-            print('Discriminator model loss real: {}.'.format(disc_loss_real / (log_interval * step_dis * 2)))
-            print('Discriminator model loss generated: {}.'.format(disc_loss_generated / (log_interval * step_dis * 2)))
+            logger.debug('Generator loss: {}.'.format(intv_com_loss))
+            logger.debug('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake)
 
-            combined_loss = np.zeros(shape=len(combined_model.metrics_names))
-            disc_loss_real = np.zeros(shape=len(discriminator_model.metrics_names))
-            disc_loss_generated = np.zeros(shape=len(discriminator_model.metrics_names))
+            # Log to CSV
+            with open(CSV_FILENAME(args.generator.NAME, args.discriminator.NAME), 'a') as csvfile:
+                csvfile.write("{}s, {}d, {}f, {}f, {}f\n".format(
+                    datetime.isoformat(),
+                    batch,
+                    intv_com_loss,
+                    intv_dis_loss_real,
+                    intv_dis_loss_fake))
+            
+            intv_com_loss = 0
+            intv_dis_loss_fake = 0
+            intv_dis_loss_real = 0
 
-            # save model checkpoints
-            model_checkpoint_base_name = os.path.join(cache_dir, '{}_model_weights_step_{}.h5')
-            generator_model.save_weights(model_checkpoint_base_name.format('generator', i))
-            discriminator_model.save_weights(model_checkpoint_base_name.format('discriminator', i))
+            # Write image
+            img_fn = IMAGE_FILENAME(args.generator.NAME, args.discriminator.NAME)
+            png.from_array(np.concatenate(gen_model.predict(next(rand_vec))), 'RGB').save(img_fn)
+            logger.debug("Saved sample images to {}.".format(img_fn))
 
+            # Save weights
+            gen_model.save_weights(WEIGHT_FILENAME(args.generator.NAME, args.discriminator.NAME, 'gen', batch))
+            dis_model.save_weights(WEIGHT_FILENAME(args.generator.NAME, args.discriminator.NAME, 'dis', batch))
 
 #
 # Command-line handlers
@@ -225,14 +248,10 @@ def dynLoadModule(pkg):
 def argparser():
     parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
 
-    parser_g1 = parser.add_mutually_exclusive_group(required=True)
-    parser_g1.add_argument('--train', action='store_const', dest='split', const='train', default='')
-    parser_g1.add_argument('--test', action='store_const', dest='split', const='test', default='')
-
     parser.add_argument('--data', metavar='D', default="cifar10",
         type=dynLoadModule("data"),
         help='the name of a tf.slim dataset reader in the data package')
-    parser.add_argument('--preprocessing', metavar='D', default="default",
+    parser.add_argument('--preprocessing', nargs="*",
         type=dynLoadModule("preprocessing"),
         help='the name of a tf.slim dataset reader in the data package')
     parser.add_argument('--generator', metavar='G', 
@@ -243,6 +262,7 @@ def argparser():
         help='name of the module containing the discrimintator model definition')
     parser.add_argument('--resume', action='store_const', const=True, default=False,
         help='attempt to load saved weights and continue training')
+    parser.add_argument("split", choices=["train", "test"])
 
     return parser
 

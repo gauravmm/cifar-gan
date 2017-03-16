@@ -1,6 +1,9 @@
 # Data support functions
 
+import numpy as np
+
 from typing import Tuple
+
 
 # TODO: Support randomization of input
 def data_stream(dataset, batch_size : int):
