@@ -14,6 +14,7 @@ import itertools
 import logging
 import os
 import sys
+import config
 
 import numpy as np
 
@@ -29,30 +30,8 @@ from keras_diagram import ascii
 
 np.random.seed(54183)
 
-PATH = {
-    "__main__": os.path.dirname(os.path.abspath(__file__)),
-    "weights" : "weights",
-    "logs"    : "train_logs",
-    "cache"   : ".cache",
-    "data"    : "data",
-}
-
-def WEIGHT_FILENAME(g_name : str, d_name : str, typ : str, step=None) -> str:
-    if step is not None:
-        step = "{:06d}".format(step) # Pad with leading zeros
-    else:
-        step = "*"                   # Wildcard
-    
-    return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}-{}.h5".format(g_name, d_name, typ, name, step))
-
-def IMAGE_FILENAME(g_name : str, d_name : str, step="*") -> str:
-    return os.path.join(PATH["weights"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
-
-def CSV_FILENAME(g_name : str, d_name : str) -> str:
-    return os.path.join(PATH["weights"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
-
 # Logging
-logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
+logging.basicConfig(filename=os.path.join(config.PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
 console.setLevel(logging.DEBUG)
@@ -124,20 +103,19 @@ def main(args):
         assert not "This feature is not implemented yet!"
         # TODO: Implement resumed training, loading the file with the highest step number that matches the wildcard
         # from WEIGHT_FILENAME().
+        support.get_latest_blob(config.get_filename('weight', args, 'gen'))
         # gen_model.load_weights(path_to_data, by_name=True)
         # dis_model.load_weights(path_to_data, by_name=True)
     else:
         # Delete old weight checkpoints
-        for f in itertools.chain(glob.glob(WEIGHT_FILENAME("gen", args.generator.NAME)),
-                                 glob.glob(WEIGHT_FILENAME("dis", args.discriminator.NAME)),
-                                 glob.glob(IMAGE_FILENAME(args.generator.NAME, args.discriminator.NAME))
-                                 ):
+        for f in itertools.chain(glob.glob(config.get_filename('weight', args)),
+                                 glob.glob(config.get_filename('image', args))):
             logger.debug("Deleting file {}".format(f))
             os.remove(f)
         logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
         batch = 0
 
-        with open(CSV_FILENAME(args.generator.NAME, args.discriminator.NAME), 'wb') as csvfile:
+        with open(config.get_filename('csv', args), 'wb') as csvfile:
             csvfile.write("time, batch, composite loss, discriminator+real loss, discriminator+fake loss\n")
 
     assert batch is not None
@@ -215,7 +193,7 @@ def main(args):
             logger.debug('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake)
 
             # Log to CSV
-            with open(CSV_FILENAME(args.generator.NAME, args.discriminator.NAME), 'a') as csvfile:
+            with open(config.get_filename('csv', args), 'a') as csvfile:
                 csvfile.write("{}s, {}d, {}f, {}f, {}f\n".format(
                     datetime.isoformat(),
                     batch,
@@ -228,13 +206,13 @@ def main(args):
             intv_dis_loss_real = 0
 
             # Write image
-            img_fn = IMAGE_FILENAME(args.generator.NAME, args.discriminator.NAME)
+            img_fn = config.get_filename('image', args, batch)
             png.from_array(np.concatenate(gen_model.predict(next(rand_vec))), 'RGB').save(img_fn)
             logger.debug("Saved sample images to {}.".format(img_fn))
 
             # Save weights
-            gen_model.save_weights(WEIGHT_FILENAME(args.generator.NAME, args.discriminator.NAME, 'gen', batch))
-            dis_model.save_weights(WEIGHT_FILENAME(args.generator.NAME, args.discriminator.NAME, 'dis', batch))
+            gen_model.save_weights(config.get_filename('weight', args, 'gen', batch))
+            dis_model.save_weights(config.get_filename('weight', args, 'dis', batch))
 
 #
 # Command-line handlers
