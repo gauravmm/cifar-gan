@@ -15,6 +15,8 @@ import logging
 import os
 import sys
 
+import support
+import tensorflow as tf
 from keras import layers, models, optimizers
 from keras_diagram import ascii
 
@@ -65,6 +67,10 @@ def main(args):
     img_dim = args.generator.IMAGE_DIM
 
 
+    #
+    # Build Model
+    #
+
     # TODO: Update calls to Keras 2 API to remove warnings. We may have to restructure the code accordingly
     # See use of new API here: https://github.com/fchollet/keras/blob/master/examples/cifar10_cnn.py
 
@@ -88,11 +94,21 @@ def main(args):
     dis_model.trainable = False # TODO: I don't understand why this is set.
     com_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
 
+    # Loss value for training
+    com_loss = np.zeros(shape=len(com_model.metrics_names))
+    dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
+    dis_loss_fake = np.copy(dis_loss_real)
+
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
     logger.debug("Discriminative model structure:\n{}".format(ascii(dis_model)))
 
-    # Load weights if necessary
+
+    #
+    # Load weights
+    #
+
+    batch = None
     if args.resume:
         assert not "This feature is not implemented yet!"
         # TODO: Implement resumed training, loading the file with the highest step number that matches the wildcard
@@ -103,50 +119,30 @@ def main(args):
         # Delete old weight checkpoints
         for f in itertools.chain(glob.glob(WEIGHT_FILENAME("gen", args.generator.NAME)),
                                  glob.glob(WEIGHT_FILENAME("dis", args.discriminator.NAME))):
-            logger.debug("Delete weight file {}".format(f))
+            logger.debug("Deleting weight file {}".format(f))
             os.remove(f)
         logger.info("Deleted all saved weights for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
+        batch = 0
+    assert batch is not None
+    
 
-
-
-
-def adversarial_training(data_dir, generator_model_path, discriminator_model_path):
     #
-    # data generators
+    # Load data
     #
+    
+    # TODO: Wrap the data source and transformations properly
+    # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
+    train_data, train_labels = args.data.get_data("train")
+    train_data = support.data_stream(train_data, batch_size)
+    train_labels = support.data_stream(train_labels, batch_size)
 
-    data_generator = image.ImageDataGenerator(
-        preprocessing_function=applications.xception.preprocess_input,
-        dim_ordering='tf')
+    # Create virual data
+    label_real = np.array([0] * batch_size) # Label to train discriminator on real data
+    label_fake = np.array([1] * batch_size) # Label to train discriminator on generated data
 
-    flow_from_directory_params = {'target_size': (img_height, img_width),
-                                  'color_mode': 'grayscale' if img_channels == 1 else 'rgb',
-                                  'class_mode': None,
-                                  'batch_size': batch_size}
-
-    real_image_generator = data_generator.flow_from_directory(
-        directory=data_dir,
-        **flow_from_directory_params
-    )
-
-    def get_image_batch():
-        img_batch = real_image_generator.next()
-
-        # keras generators may generate an incomplete batch for the last batch
-        if len(img_batch) != batch_size:
-            img_batch = real_image_generator.next()
-
-        assert img_batch.shape == (batch_size, img_height, img_width, img_channels), img_batch.shape
-        return img_batch
-
-    # the target labels for the binary cross-entropy loss layer are 0 for every yj (real) and 1 for every xi (generated)
-    y_real = np.array([0] * batch_size)
-    y_generated = np.array([1] * batch_size)
-
-    combined_loss = np.zeros(shape=len(combined_model.metrics_names))
-    disc_loss_real = np.zeros(shape=len(discriminator_model.metrics_names))
-    disc_loss_generated = np.zeros(shape=len(discriminator_model.metrics_names))
-
+    #
+    # Training
+    #
 
     for i in range(nb_steps):
         print('Step: {} of {}.'.format(i, nb_steps))
