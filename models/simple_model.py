@@ -2,6 +2,7 @@
 A simple model, containing both generator and discriminator.
 """
 from keras import layers, models
+from typing import Tuple
 
 #
 # Params
@@ -30,10 +31,15 @@ log_interval = 100  # interval (in steps) at which to log loss summaries & save 
 # Name of generator
 NAME="Simple"
 # Size of random seed used by the generator's input tensor:
-SEED_DIM = 112 
+SEED_DIM = (32,)
+# Size of the output. The generator, discriminator and dataset will be required to use this size.
+IMAGE_DIM = (32, 32, 3)
 
-# TODO: Documentation
-def generator(input_tensor):
+def generator(input_tensor : layers.Input, input_size : Tuple[int, int, int]) -> layers.convolutional._Conv:
+    # We only allow the discriminator model to work on CIFAR-sized data.
+    assert input_size == (32, 32, 3)
+    (img_height, img_width, img_channels) = input_size
+
     def add_common_layers(y):
         y = layers.Activation('relu')(y)
         return y
@@ -42,8 +48,8 @@ def generator(input_tensor):
     # input dimensions to the first conv layer in the generator
     #
 
-    height_dim = 7
-    width_dim = 7
+    height_dim = 8
+    width_dim = 8
     assert img_height % height_dim == 0 and img_width % width_dim == 0, \
         'Generator network must be able to transform `x` into a tensor of shape (img_height, img_width, img_channels).'
 
@@ -85,7 +91,11 @@ def generator(input_tensor):
 # Each generator/discriminator needs a name if they are in different files
 # NAME="Simple"
 
-def discriminator(x):
+def discriminator(x, input_size):
+    # We only allow the discriminator model to work on CIFAR-sized data.
+    assert input_size == (32, 32, 3)
+    (img_height, img_width, img_channels) = input_size
+
     def add_common_layers(y):
         y = layers.advanced_activations.LeakyReLU()(y)
         return y

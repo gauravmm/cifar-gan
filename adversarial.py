@@ -19,8 +19,11 @@ PATH = {
     "__main__": os.path.dirname(os.path.abspath(__file__)),
     "weights" : "weights",
     "logs"    : "train_logs",
-    "cache"   : ".cache"
+    "cache"   : ".cache",
+    "data"    : "data",
 }
+def WEIGHT_FILENAME(typ : str, name : str, step : int) -> str:
+    return os.join(PATH["weights"], "checkpoint-{}-{}-{0:06d}".format(typ, name, step))
 
 logging.basicConfig(filename=os.path.join(PATH['logs'], 'adversarial.log'), level=logging.INFO, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
@@ -37,44 +40,36 @@ def main(args):
     logger.info("Loaded generator    : \t{}".format(args.generator.__file__))
     logger.info("Loaded discriminator: \t{}".format(args.discriminator.__file__))
 
-    # Input/output tensors:
-    gen_input  = layers.Input(shape=(args.generator.SEED_DIM,))
-    gen_output = generator_network(generator_input_tensor)
+    img_dim = args.generator.IMAGE_DIM
 
-    generated_or_real_image_tensor = layers.Input(shape=(img_height, img_width, img_channels))
-    discriminator_output = discriminator_network(generated_or_real_image_tensor)
+    # Input/output tensors:
+    gen_input  = layers.Input(shape=args.generator.SEED_DIM)
+    gen_output = args.generator.generator(gen_input, img_dim)
+    dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
+    dis_output = args.discriminator.discriminator(dis_input, img_dim)
+
+    logger.info("Constructed computational graphs.")
+
+    # TODO: Abstract the optimizer settings out, possibly into the generator and discriminator definitions
+    optim = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in appendix A of DeepMind's AC-GAN paper
+
+    # Define and compile models
+    gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
+    dis_model = models.Model(input=dis_input, output=dis_output, name='discriminator')
+    # We compose the discriminator onto the generator to produce the combined model:
+    com_model = models.Model(input=gen_input, output=dis_model(gen_model(gen_input)), name='combined')
+
+    gen_model.compile(optimizer=optim, loss='binary_crossentropy')
+    dis_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
+    dis_model.trainable = False # TODO: I don't understand why this is set.
+    com_model.compile(optimizer=optim, loss='binary_crossentropy', metrics=['accuracy'])
+
+    logger.info("Compiled models.")
+    logger.info(gen_model.summary())
+    logger.info(gen_model.summary())
 
 
 def adversarial_training(data_dir, generator_model_path, discriminator_model_path):
-    #
-    # define model input and output tensors
-    #
-
-    #
-    # define models
-    #
-
-    generator_model = models.Model(input=generator_input_tensor, output=generated_image_tensor, name='generator')
-    discriminator_model = models.Model(input=generated_or_real_image_tensor, output=discriminator_output,
-                                       name='discriminator')
-
-    combined_output = discriminator_model(generator_model(generator_input_tensor))
-    combined_model = models.Model(input=generator_input_tensor, output=combined_output, name='combined')
-
-    #
-    # compile models
-    #
-
-    adam = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999)  # as described in appendix A of DeepMind's AC-GAN paper
-
-    generator_model.compile(optimizer=adam, loss='binary_crossentropy')
-    discriminator_model.compile(optimizer=adam, loss='binary_crossentropy', metrics=['accuracy'])
-    discriminator_model.trainable = False
-    combined_model.compile(optimizer=adam, loss='binary_crossentropy', metrics=['accuracy'])
-
-    print(generator_model.summary())
-    print(discriminator_model.summary())
-
     #
     # data generators
     #
