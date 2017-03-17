@@ -1,10 +1,12 @@
 # Data support functions
 
 import argparse
+import functools
 import glob
 import importlib
 import itertools
 import logging
+import os
 import sys
 
 import numpy as np
@@ -23,25 +25,42 @@ class Data(object):
         train_data, train_labels = args.data.get_data("train")
         logger.info("Data loaded from disk.")
 
+        train = zip(_data_stream(train_data, args.hyperparam.batch_size), _data_stream(train_labels, args.hyperparam.batch_size))
+
+        # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         for p in args.preprocessor:
-            assert not "This feature is not implemented yet!"
+            train = itertools.starmap(p.apply, train)
+        # Only keep the images, discard the labels
+        train = map(lambda x: x[0], train)
         
         self.rand_vec = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
-        self.real     = _data_stream(train_data, args.hyperparam.batch_size)
-        self.labels   = _data_stream(train_labels, args.hyperparam.batch_size)
+        # Present images them in chunks of exactly batch-size:
+        self.real     = _image_stream_batch(train, args.hyperparam.batch_size)
+        self.raw      = (train_data, train_labels)
+        self.unapply  = functools.reduce(lambda f, g: lambda x: f(g(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
 
         # Use to label a batch as real
         self.label_real = np.array([0] * args.hyperparam.batch_size)  # Label to train discriminator on real data
         # Use to label a batch as fake
         self.label_fake = np.array([1] * args.hyperparam.batch_size)  # Label to train discriminator on generated data
-
-
+    
 
 # TODO: Support preprocessors.
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
 #       better generalization.
 # TODO: Support randomization of input
+
+# A generator that enforces the batch-size of the input. Used to feed keras the right amount of data even with data 
+# augmentation increasing the batch size.
+def _image_stream_batch(itr, batch_size):
+    remainder = next(itr)
+    while True:
+        while remainder.shape[0] < batch_size:
+            remainder = np.concatenate((remainder, next(itr)))
+        yield remainder[:batch_size,...]
+        remainder = remainder[batch_size:,...]
+
 def _data_stream(dataset, batch_size : int):
     # The first index of the next batch:
     i = 0 # Type: int
@@ -130,7 +149,7 @@ def argparser():
 
     parser.add_argument('--preprocessor', nargs="*", default=[],
         type=dynLoadModule("preprocessor"),
-        help='the name of files with image preprocessing instructions in the preprocessor package; may be applied in any order')
+        help='the name of files with image preprocessing instructions in the preprocessor package; applied in left-to-right order')
     parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
         help="the number of batches between reporting results and saving weights")
     parser.add_argument('--resume', action='store_const', const=True, default=False,

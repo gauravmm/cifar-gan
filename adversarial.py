@@ -7,10 +7,12 @@ Handles the loading of data from ./data, models from ./models, training, and tes
 Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox/
 """
 
+import datetime
 import itertools
 import logging
 import os
 import sys
+import time
 
 import numpy as np
 
@@ -153,10 +155,9 @@ def main(args):
                                    com_model.train_on_batch(next(data.rand_vec), data.label_real))
 
         # That is the entire training algorithm.
-
         # Produce output every interval:
         if not batch % args.log_interval and batch != 0:
-            logger.info("Completed batch {}/{}".format(batch, nb_steps))
+            logger.info("Completed batch {}/{}".format(batch, args.hyperparam.halt_batches))
 
             # Compute the average loss over this interval
             intv_com_loss      /= args.log_interval * args.hyperparam.generator_per_step
@@ -170,7 +171,7 @@ def main(args):
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
                 print("{}s, {}d, {}f, {}f, {}f".format(
-                    datetime.isoformat(),
+                    datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
                     batch,
                     intv_com_loss,
                     intv_dis_loss_real,
@@ -183,7 +184,7 @@ def main(args):
 
             # Write image
             img_fn = config.get_filename('image', args, batch)
-            png.from_array(np.concatenate(gen_model.predict(next(rand_vec))), 'RGB').save(img_fn)
+            png.from_array(np.concatenate(data.unapply(gen_model.predict(next(data.rand_vec)))), 'RGB').save(img_fn)
             logger.debug("Saved sample images to {}.".format(img_fn))
 
             # Save weights
