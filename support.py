@@ -88,14 +88,15 @@ def _random_stream(batch_size : int, img_size : Tuple[int, int, int]):
 # Filesystem
 #
 
-def get_latest_blob(blob):
+def _get_latest_glob(blob):
     """
     Returns the file that matches blob (with a single wildcard), that has the highest numeric value in the wildcard.
     """
-    assert len(filter(lambda x: x == "*", blob)) == 1 # There should only be one wildcard in blob
+    assert len(list(filter(lambda x: x == "*", blob))) == 1 # There should only be one wildcard in blob
     
     blobs = glob.glob(blob)
-    assert len(blobs) # There should be at least one matchs
+    if not len(blobs):
+        raise Exception("Cannot file file matching {}".format(blob))
     
     ltrunc = blob.index("*")           # Number of left characters to remove
     rtrunc = -(len(blob) - ltrunc + 1) # Number of right characters to remove
@@ -107,19 +108,21 @@ def get_latest_blob(blob):
 def resume(args, gen_model, dis_model):
     try:
         # Load files as necessary
-        gen_num, gen_fn = get_latest_glob(config.get_filename('weight', args, 'gen'))
-        dis_num, dis_fn = get_latest_glob(config.get_filename('weight', args, 'dis'))
+        gen_num, gen_fn = _get_latest_glob(config.get_filename('weight', args, 'gen'))
+        dis_num, dis_fn = _get_latest_glob(config.get_filename('weight', args, 'dis'))
 
         # Check if the files are from the same batch.
         assert gen_num == dis_num
-        
+
         gen_model.load_weights(gen_fn, by_name=True)
         logger.info("Loaded generator weights from {}".format(gen_fn))
         dis_model.load_weights(dis_fn, by_name=True)
         logger.info("Loaded discriminator weights from {}".format(gen_fn))
+
         return gen_num
-    except:
-        logger.warn("Caught exception {}s".format(sys.exc_info()[0]))
+
+    except Exception as e:
+        logger.warn("Caught exception: {}".format(e))
         return None
 
 def clear(args):

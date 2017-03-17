@@ -68,14 +68,13 @@ def main(args):
     # Input/output tensors:
     gen_input  = layers.Input(shape=args.generator.SEED_DIM)
     gen_output = args.generator.generator(gen_input, img_dim)
+    gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
+    
     dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
     dis_output = args.discriminator.discriminator(dis_input, img_dim)
-
-    logger.info("Constructed computational graphs.")
-
-    # Define and compile models
-    gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
     dis_model = models.Model(input=dis_input, output=dis_output, name='discriminator')
+    
+    # Define and compile models
     # We compose the discriminator onto the generator to produce the combined model:
     com_model = models.Model(input=gen_input, output=dis_model(gen_model(gen_input)), name='combined')
 
@@ -123,7 +122,7 @@ def main(args):
     # Training
     #
 
-    logger.info("Starting training. Logging every {} steps.".format(args.log_interval))
+    logger.info("Starting training. Reporting metrics {} every {} steps.".format(",".join(com_model.metrics_names), args.log_interval))
 
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
