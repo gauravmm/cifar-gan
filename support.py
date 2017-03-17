@@ -18,8 +18,31 @@ logger = logging.getLogger()
 # Data
 #
 
+class Data(object):
+    def __init__(self, args):
+        train_data, train_labels = args.data.get_data("train")
+        logger.info("Data loaded from disk.")
+
+        for p in args.preprocessor:
+            assert not "This feature is not implemented yet!"
+        
+        self.rand_vec = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
+        self.real     = _data_stream(train_data, args.hyperparam.batch_size)
+        self.labels   = _data_stream(train_labels, args.hyperparam.batch_size)
+
+        # Use to label a batch as real
+        self.label_real = np.array([0] * args.hyperparam.batch_size)  # Label to train discriminator on real data
+        # Use to label a batch as fake
+        self.label_fake = np.array([1] * args.hyperparam.batch_size)  # Label to train discriminator on generated data
+
+
+
+# TODO: Support preprocessors.
+# TODO: Support reading test data.
+# TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
+#       better generalization.
 # TODO: Support randomization of input
-def data_stream(dataset, batch_size : int):
+def _data_stream(dataset, batch_size : int):
     # The first index of the next batch:
     i = 0 # Type: int
     
@@ -36,7 +59,7 @@ def data_stream(dataset, batch_size : int):
     return data_gen
 
 # Produces a stream of random data
-def random_stream(batch_size : int, img_size : Tuple[int, int, int]):
+def _random_stream(batch_size : int, img_size : Tuple[int, int, int]):
     sz = [batch_size, *img_size]
     while True:
         yield np.random.normal(size=sz)
