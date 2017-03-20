@@ -24,6 +24,10 @@ This codebase is targeted at Python 3.5
 3. Follow the installation instructions [here](https://www.tensorflow.org/install/install_linux#InstallingNativePip) to install TensorFlow.
 4. Install prerequisites using `pip3 install mypy-lang pypandoc h5py pypng git+https://github.com/fchollet/keras.git keras-diagram`
 
+## Running
+
+Run `experiment.sh`. Output will be logged to `train_logs/` including loss, accuracy, and generated images; and weights will be saved to `weights/`.
+
 ## Coding Standards
 We will use git for distributed version control. Feel free to submit pull requests with partial/incomplete work. This is research code, and so there are only two coding standards:
 
@@ -32,6 +36,4 @@ We will use git for distributed version control. Feel free to submit pull reques
    1. It should be self-contained in a single commit. (You _should_ indicate that commit hash in the Google spreadsheet we are using to aggregate results.)
    2. We must be able to replicate that on any machine by running `experiment.sh`.
    3. You must set your random seed explicitly so that all runs are identical.
-
-## Tutorial
 
