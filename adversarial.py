@@ -70,7 +70,7 @@ def main(args):
     # We compose the discriminator onto the generator to produce the combined model:
     gen_model = args.generator.generator(args.generator.SEED_DIM, args.generator.IMAGE_DIM)
     dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
-    com_model = models.Model(input=gen_input, output=dis_model(gen_model(gen_input)), name='combined')
+    com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
 
     gen_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy')
     dis_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
