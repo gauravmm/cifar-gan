@@ -32,3 +32,6 @@ We will use git for distributed version control. Feel free to submit pull reques
    1. It should be self-contained in a single commit. (You _should_ indicate that commit hash in the Google spreadsheet we are using to aggregate results.)
    2. We must be able to replicate that on any machine by running `experiment.sh`.
    3. You must set your random seed explicitly so that all runs are identical.
+
+## Tutorial
+

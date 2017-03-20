@@ -99,13 +99,22 @@ def main(args):
     if args.resume:
         batch = support.resume(args, gen_model, dis_model)
         if batch:
-            logger.info("Resuming from batch {}d".format(batch))
+            logger.info("Resuming from batch {}".format(batch))
         else:
             logger.warn("Could not resume training.".format(batch))
 
     # Clear the files
     if batch is None:
         batch = support.clear(args)
+        
+        # Write CSV file headers
+        with open(config.get_filename('csv', args), 'w') as csvfile:
+            print("time, batch, " + ", ".join("{} {}".format(a, b) 
+                                            for b in com_model.metrics_names
+                                            for a in ["composite", "discriminator+real", "discriminator+fake"]),
+                  file=csvfile)
+        logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
+
 
     assert batch is not None
     
@@ -122,7 +131,7 @@ def main(args):
     # Training
     #
 
-    logger.info("Starting training. Reporting metrics {} every {} steps.".format(",".join(com_model.metrics_names), args.log_interval))
+    logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(com_model.metrics_names), args.log_interval))
 
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
@@ -169,7 +178,7 @@ def main(args):
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
-                print("{}s, {}d, {}f, {}f, {}f".format(
+                print("{}, {}, {}, {}, {}".format(
                     datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
                     batch,
                     intv_com_loss,

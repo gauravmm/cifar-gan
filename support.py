@@ -133,10 +133,6 @@ def clear(args):
         os.remove(f)
     logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
 
-    with open(config.get_filename('csv', args), 'w') as csvfile:
-        print("time, batch, composite loss, discriminator+real loss, discriminator+fake loss", file=csvfile)
-        logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
-
     return 0
 
 #
