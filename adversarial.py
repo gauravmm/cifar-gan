@@ -39,7 +39,7 @@ console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)
 logging.getLogger().addHandler(console)
 logger = logging.getLogger()
 
-
+batch = None
 def main(args):
     """
     Main class, does:
@@ -95,7 +95,6 @@ def main(args):
     # Load weights
     #
 
-    batch = None
     if args.resume:
         batch = support.resume(args, gen_model, dis_model)
         if batch:
@@ -206,4 +205,11 @@ def main(args):
 
 if __name__ == '__main__':
     logger.info("Started")
-    main(support.argparser().parse_args())
+    try:
+        main(support.argparser().parse_args())
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt while processing batch {}".format(batch))
+    except:
+        raise
+    finally:
+        logger.info("Halting")

@@ -23,7 +23,7 @@ logger = logging.getLogger()
 class Data(object):
     def __init__(self, args):
         train_data, train_labels = args.data.get_data("train")
-        logger.info("Data loaded from disk.")
+        logger.info("Training data loaded from disk.")
 
         train = zip(_data_stream(train_data, args.hyperparam.batch_size), _data_stream(train_labels, args.hyperparam.batch_size))
 
@@ -122,7 +122,8 @@ def resume(args, gen_model, dis_model):
         return gen_num + 1
 
     except Exception as e:
-        logger.warn("Caught exception: {}".format(e))
+        logger.warn("Exception: {}".format(e))
+        logger.debug(sys.exc_info())
         return None
 
 def clear(args):
