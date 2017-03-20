@@ -117,7 +117,7 @@ def resume(args, gen_model, dis_model):
         gen_model.load_weights(gen_fn, by_name=True)
         logger.info("Loaded generator weights from {}".format(gen_fn))
         dis_model.load_weights(dis_fn, by_name=True)
-        logger.info("Loaded discriminator weights from {}".format(gen_fn))
+        logger.info("Loaded discriminator weights from {}".format(dis_fn))
 
         return gen_num + 1
 

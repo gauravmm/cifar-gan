@@ -137,6 +137,9 @@ def main(args):
     intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
 
+    # Format the score printing
+    print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
+
     for batch in range(batch, args.hyperparam.halt_batches):
         logger.debug('Step {} of {}.'.format(batch, args.hyperparam.halt_batches))
 
@@ -172,8 +175,9 @@ def main(args):
             intv_dis_loss_real /= args.log_interval * args.hyperparam.discriminator_per_step
 
             # Log a summary
-            logger.info('Generator loss: {}.'.format(intv_com_loss))
-            logger.info('Discriminator loss on real: {}, fake: {}.'.format(intv_dis_loss_real, intv_dis_loss_fake))
+            logger.info("Generator {}.".format(print_score(intv_com_loss)))
+            logger.info("Discriminator loss on real: {}.".format(print_score(intv_dis_loss_real)))
+            logger.info("Discriminator loss on fake: {}.".format(print_score(intv_dis_loss_fake)))
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
