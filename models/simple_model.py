@@ -8,14 +8,6 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Conv2DTranspose
 from keras.layers.advanced_activations import LeakyReLU
 
-# TODO: Update calls to Keras 2 API to remove warnings
-
-#
-# Params
-#
-
-# shared network params
-conv_layer_keyword_args = {'border_mode': 'same', 'subsample': (2, 2)}
 
 #
 # GENERATOR
@@ -52,14 +44,11 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
         features //= 2
         
         model.add(Conv2DTranspose(features, (3, 3),
-                                  output_shape=(None, dim, dim, features),
-                                  **conv_layer_keyword_args))
+                                  padding = 'same', strides=(2, 2)))
         model.add(Activation('relu'))
 
     # number of feature maps => number of image channels
-    model.add(Conv2DTranspose(img_channels, 1, 1, activation='tanh',
-                              border_mode='same',
-                              output_shape=(None, img_height, img_width, img_channels)))
+    model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
     
     return model
 
@@ -87,7 +76,7 @@ def discriminator(input_size):
     while img_height > dim:
         dim *= 2
         features *= 2
-        model.add(Conv2D(features, (3, 3), **conv_layer_keyword_args))
+        model.add(Conv2D(features, (3, 3), padding='same', strides=(2, 2)))
         model.add(LeakyReLU())
 
     model.add(Flatten())
