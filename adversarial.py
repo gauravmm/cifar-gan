@@ -62,20 +62,14 @@ def main(args):
     # Build Model
     #
 
-    # TODO: Update calls to Keras 2 API to remove warnings. We may have to restructure the code accordingly
-    # See use of new API here: https://github.com/fchollet/keras/blob/master/examples/cifar10_cnn.py
-
-    # Input/output tensors:
     gen_input  = layers.Input(shape=args.generator.SEED_DIM)
-    gen_output = args.generator.generator(gen_input, img_dim)
-    gen_model = models.Model(input=gen_input, output=gen_output, name='generator')
+    # dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
     
-    dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
-    dis_output = args.discriminator.discriminator(dis_input, img_dim)
-    dis_model = models.Model(input=dis_input, output=dis_output, name='discriminator')
-    
+    # Input/output tensors:
     # Define and compile models
     # We compose the discriminator onto the generator to produce the combined model:
+    gen_model = args.generator.generator(args.generator.SEED_DIM, args.generator.IMAGE_DIM)
+    dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
     com_model = models.Model(input=gen_input, output=dis_model(gen_model(gen_input)), name='combined')
 
     gen_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy')
@@ -174,9 +168,9 @@ def main(args):
             intv_dis_loss_real /= args.log_interval * args.hyperparam.discriminator_per_step
 
             # Log a summary
-            logger.info("Generator {}.".format(print_score(intv_com_loss)))
-            logger.info("Discriminator loss on real: {}.".format(print_score(intv_dis_loss_real)))
-            logger.info("Discriminator loss on fake: {}.".format(print_score(intv_dis_loss_fake)))
+            logger.info("Generator; {}.".format(print_score(intv_com_loss)))
+            logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real)))
+            logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake)))
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
