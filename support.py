@@ -12,6 +12,7 @@ import sys
 import numpy as np
 
 import config
+from config import IMAGE_GUTTER
 from typing import Tuple
 
 logger = logging.getLogger()
@@ -45,7 +46,6 @@ class Data(object):
         self.label_fake = np.array([1] * args.hyperparam.batch_size)  # Label to train discriminator on generated data
     
 
-# TODO: Support preprocessors.
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
 #       better generalization.
@@ -83,6 +83,24 @@ def _random_stream(batch_size : int, img_size : Tuple[int, int, int]):
     while True:
         yield np.random.normal(size=sz)
 
+#
+# Image handling
+#
+
+def arrange_images(img_data, args):
+    num, rw, cl, ch = img_data.shape
+    cols = args.image_columns
+    rows = num // args.image_columns
+
+    rv = np.empty((rows * (rw + IMAGE_GUTTER) - IMAGE_GUTTER, cols * (cl + IMAGE_GUTTER) - IMAGE_GUTTER, ch), dtype=np.uint8)
+    rv[...] = 255
+
+    for i in range(rows):
+        for j in range(cols):
+            rv[i*(rw + IMAGE_GUTTER):i*(rw + IMAGE_GUTTER) + rw,
+               j*(cl + IMAGE_GUTTER):j*(cl + IMAGE_GUTTER) + cl,:] = img_data[i * cols + j,...]
+    
+    return rv
 
 #
 # Filesystem
@@ -152,6 +170,8 @@ def argparser():
         help='the name of files with image preprocessing instructions in the preprocessor package; applied in left-to-right order')
     parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
         help="the number of batches between reporting results and saving weights")
+    parser.add_argument('--image-columns', default=1, type=int,
+        help="the number of columns to group produced images into")        
     parser.add_argument('--resume', action='store_const', const=True, default=False,
         help='attempt to load saved weights and continue training')
 

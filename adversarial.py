@@ -10,6 +10,7 @@ Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox
 import datetime
 import itertools
 import logging
+import math
 import os
 import sys
 import time
@@ -49,11 +50,11 @@ def main(args):
     
     args contains the commandline arguments, and the classes specified by commandline argument.
     """
-    logger.info("Loaded dataset      : \t{}".format(args.data.__file__))
-    logger.info("Loaded generator    : \t{}".format(args.generator.__file__))
-    logger.info("Loaded discriminator: \t{}".format(args.discriminator.__file__))
-    logger.info("Loaded hyperparameters: \t{}".format(args.hyperparam.__file__))
-    logger.info("Loaded preprocessors: \t{}".format(", ".join(a.__file__ for a in args.preprocessor)))
+    logger.info("Loaded dataset        : {}".format(args.data.__file__))
+    logger.info("Loaded generator      : {}".format(args.generator.__file__))
+    logger.info("Loaded discriminator  : {}".format(args.discriminator.__file__))
+    logger.info("Loaded hyperparameters: {}".format(args.hyperparam.__file__))
+    logger.info("Loaded preprocessors  : {}".format(", ".join(a.__file__ for a in args.preprocessor)))
 
     img_dim = args.generator.IMAGE_DIM
 
@@ -90,9 +91,10 @@ def main(args):
     #
 
     if args.resume:
+        logger.info("Attempting to resume from saved checkpoints.")
         batch = support.resume(args, gen_model, dis_model)
         if batch:
-            logger.info("Resuming from batch {}".format(batch))
+            logger.info("Successfully resumed from batch {}".format(batch))
         else:
             logger.warn("Could not resume training.".format(batch))
 
@@ -188,7 +190,8 @@ def main(args):
 
             # Write image
             img_fn = config.get_filename('image', args, batch)
-            png.from_array(np.concatenate(data.unapply(gen_model.predict(next(data.rand_vec)))), 'RGB').save(img_fn)
+            img_data = data.unapply(gen_model.predict(next(data.rand_vec)))
+            png.from_array(support.arrange_images(img_data, args), 'RGB').save(img_fn)
             logger.debug("Saved sample images to {}.".format(img_fn))
 
             # Save weights

@@ -30,3 +30,5 @@ def _CSV_FILENAME(g_name : str, d_name : str) -> str:
 _FILENAME = {'weight': _WEIGHT_FILENAME, 'image': _IMAGE_FILENAME, 'csv': _CSV_FILENAME}
 def get_filename(t, cli_args, *args):
     return _FILENAME[t](cli_args.generator.NAME, cli_args.discriminator.NAME, *args)
+
+IMAGE_GUTTER = 5

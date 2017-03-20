@@ -7,4 +7,5 @@ python3 adversarial.py \
     --generator     simple_model \
     --discriminator simple_model \
     --log-interval 50 \
+    --image-columns 4 \
     train \
