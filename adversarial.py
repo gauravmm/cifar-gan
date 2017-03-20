@@ -123,7 +123,6 @@ def main(args):
     # Load data
     #
     
-    # TODO: Wrap the data source and transformations properly
     # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
     data = support.Data(args)
 

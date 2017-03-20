@@ -99,11 +99,11 @@ def _get_latest_glob(blob):
         raise Exception("Cannot file file matching {}".format(blob))
     
     ltrunc = blob.index("*")           # Number of left characters to remove
-    rtrunc = -(len(blob) - ltrunc + 1) # Number of right characters to remove
+    rtrunc = -(len(blob) - ltrunc - 1) # Number of right characters to remove
     
     # Get the indices hidden behind the wildcard
     idx = [int(b[ltrunc:rtrunc]) for b in blobs]
-    return next(sorted(zip(idx, blobs), reverse=True))
+    return sorted(zip(idx, blobs), reverse=True)[0]
 
 def resume(args, gen_model, dis_model):
     try:
@@ -119,7 +119,7 @@ def resume(args, gen_model, dis_model):
         dis_model.load_weights(dis_fn, by_name=True)
         logger.info("Loaded discriminator weights from {}".format(gen_fn))
 
-        return gen_num
+        return gen_num + 1
 
     except Exception as e:
         logger.warn("Caught exception: {}".format(e))
