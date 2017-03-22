@@ -160,7 +160,7 @@ def clear(args):
 
 def dynLoadModule(pkg):
     # Used to dynamically load modules in commandline options.
-    return lambda modname: importlib.import_module(pkg + "." + modname, package=".")
+    return lambda modname: importlib.import_module(pkg + "." + modname, package="")
 
 def argparser():
     parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
