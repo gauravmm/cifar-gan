@@ -23,7 +23,7 @@ import support
 import tensorflow as tf
 from keras import layers, models
 from keras_diagram import ascii
-
+from keras import optimizer 
 #
 # Init
 #
@@ -76,8 +76,11 @@ def main(args):
     dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
     com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
 
-    gen_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy')
-    dis_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+    # The default values in the Adam and SGD optimizers are used here 
+    adam = optimizer.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+    sgd = optimizer.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=False)
+    gen_model.compile(optimizer=adam, loss='binary_crossentropy')
+    dis_model.compile(optimizer=sgd, loss='binary_crossentropy', metrics=['accuracy'])
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
