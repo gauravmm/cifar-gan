@@ -41,10 +41,13 @@ class Data(object):
         self.unapply  = functools.reduce(lambda f, g: lambda x: f(g(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
 
         # Use to label a batch as real
-        self.label_real = np.array([0] * args.hyperparam.batch_size)  # Label to train discriminator on real data
+        self.label_real = map(lambda a, b: a + b,
+                              _value_stream(args.hyperparam.batch_size, 0),
+                              _function_stream(lambda: args.hyperparam.label_noise(True, args.hyperparam.batch_size)))
         # Use to label a batch as fake
-        self.label_fake = np.array([1] * args.hyperparam.batch_size)  # Label to train discriminator on generated data
-    
+        self.label_fake = map(lambda a, b: a + b,
+                              _value_stream(args.hyperparam.batch_size, 1),
+                              _function_stream(lambda: args.hyperparam.label_noise(False, args.hyperparam.batch_size)))
 
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
@@ -82,6 +85,15 @@ def _random_stream(batch_size : int, img_size : Tuple[int, int, int]):
     sz = [batch_size, *img_size]
     while True:
         yield np.random.normal(size=sz)
+
+def _value_stream(batch_size : int, value):
+    while True:
+        yield np.full((batch_size,), value, dtype=np.float16)
+
+def _function_stream(func):
+    while True:
+        yield func()
+
 
 #
 # Image handling
