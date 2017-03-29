@@ -40,6 +40,7 @@ console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)
 logging.getLogger().addHandler(console)
 logger = logging.getLogger()
 
+global batch
 batch = None
 def main(args):
     """
@@ -50,6 +51,8 @@ def main(args):
     
     args contains the commandline arguments, and the classes specified by commandline argument.
     """
+    global batch
+
     logger.info("Loaded dataset        : {}".format(args.data.__file__))
     logger.info("Loaded generator      : {}".format(args.generator.__file__))
     logger.info("Loaded discriminator  : {}".format(args.discriminator.__file__))
