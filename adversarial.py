@@ -148,9 +148,11 @@ def main(args):
         for _ in range(args.hyperparam.discriminator_per_step):
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            intv_dis_loss_fake += dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)), data.label_fake)
+            intv_dis_loss_fake += dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
+                                                           next(data.label_dis_fake))
             # Use real images, and train the model to predict them as real.
-            intv_dis_loss_real += dis_model.train_on_batch(next(data.real), data.label_real)
+            intv_dis_loss_real += dis_model.train_on_batch(next(data.real),
+                                                           next(data.label_dis_real))
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
         # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
@@ -159,8 +161,7 @@ def main(args):
         # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
         # as real.
         for _ in range(args.hyperparam.generator_per_step):
-            intv_com_loss = np.add(intv_com_loss,
-                                   com_model.train_on_batch(next(data.rand_vec), data.label_real))
+            intv_com_loss += com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
 
         # That is the entire training algorithm.
         # Produce output every interval:

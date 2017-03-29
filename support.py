@@ -40,11 +40,21 @@ class Data(object):
         self.raw      = (train_data, train_labels)
         self.unapply  = functools.reduce(lambda f, g: lambda x: f(g(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
 
-        # Use to label a batch as real
-        self.label_real = np.array([0] * args.hyperparam.batch_size)  # Label to train discriminator on real data
-        # Use to label a batch as fake
-        self.label_fake = np.array([1] * args.hyperparam.batch_size)  # Label to train discriminator on generated data
-    
+        # Use to label a discriminator batch as real
+        self._label_dis_real = map(lambda a, b: a + b,
+                              _value_stream(args.hyperparam.batch_size, 0),
+                              _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.batch_size)))
+        # Use to label a discriminator batch as fake
+        self._label_dis_fake = map(lambda a, b: a + b,
+                              _value_stream(args.hyperparam.batch_size, 1),
+                              _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
+        # Random flipping support
+        self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
+                                                self._label_dis_real, self._label_dis_fake)
+        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
+                                                self._label_dis_fake, self._label_dis_real)
+        # Use to label a generator batch as real
+        self.label_gen_real = _value_stream(args.hyperparam.batch_size, 1)
 
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
@@ -82,6 +92,52 @@ def _random_stream(batch_size : int, img_size : Tuple[int, int, int]):
     sz = [batch_size, *img_size]
     while True:
         yield np.random.normal(size=sz)
+
+def _value_stream(batch_size : int, value):
+    while True:
+        yield np.full((batch_size,), value, dtype=np.float16)
+
+def _log_stream(name, gen):
+    while True:
+        g = next(gen)
+        np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+        logger.debug("Logging values in stream {}: {}".format(name, g))
+        yield g
+
+def _function_stream(func):
+    while True:
+        yield func()
+
+def _selection_stream(probs, *args):
+    """
+    Implements elementwise random.choice; For each element in the generators passed to args, selects them according to
+    the distribution given in probs. If none is given, uniform distribution is used.
+    """
+    if len(args) == 0:
+        raise "We need at least one arg to select from."
+
+    if probs is not None:
+        probs = list(probs)
+    else:
+        probs = [1/float(len(args))] * args
+    s = sum(probs)
+
+    if s > 1:
+        raise AssertionError("The sum of all probabilities given to selection stream must be no more than 1.")
+    n = len(args) - len(probs)
+    for _ in range(n):
+        probs.append((1-s)/float(n))
+
+    while True:
+        # Get the next element for all the generators in args. We assemble this into a list of ndarray, where each ndarray
+        # is of shape (i, j, k, ...).
+        ch = list(map(lambda g: next(g), args))
+        
+        # The call to np.random.choice makes ndarray of shape (i, j, k, ...), each element containing a value from
+        # range(len(args)), selected from the discrete distribution given by probs. We then use np.choose to map that
+        # into an actual value.
+        yield np.choose(np.random.choice(len(ch), size=ch[0].shape, p=probs), ch)
+
 
 #
 # Image handling
