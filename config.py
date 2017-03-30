@@ -8,6 +8,7 @@ PATH = {
     "__main__": os.path.dirname(os.path.abspath(__file__)),
     "weights" : "weights",
     "logs"    : "train_logs",
+    "images"  : "train_logs",
     "cache"   : ".cache",
     "data"    : "data",
 }
@@ -21,7 +22,7 @@ def _WEIGHT_FILENAME(g_name : str, d_name : str, typ : str = "*", step=None) -> 
     return os.path.join(PATH["weights"], "checkpoint-{}-{}-{}-{}.h5".format(g_name, d_name, typ, step))
 
 def _IMAGE_FILENAME(g_name : str, d_name : str, step="*") -> str:
-    return os.path.join(PATH["logs"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
+    return os.path.join(PATH["images"], "generated-{}-{}-{}.png".format(g_name, d_name, step))
 
 def _CSV_FILENAME(g_name : str, d_name : str) -> str:
     return os.path.join(PATH["logs"], "loss-{}-{}.csv".format(g_name, d_name))
