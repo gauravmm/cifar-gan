@@ -7,6 +7,7 @@ from typing import Tuple
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Conv2DTranspose
 from keras.layers.advanced_activations import LeakyReLU
+from keras.layers.normalization import BatchNormalization
 
 
 #
@@ -35,6 +36,7 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
     model = Sequential()
 
     model.add(Dense(dim * dim * 16, input_shape=input_size))
+    model.add(BatchNormalization())
     model.add(Activation('relu'))
     model.add(layers.Reshape((dim, dim, -1)))
 
@@ -45,6 +47,7 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
         
         model.add(Conv2DTranspose(features, (3, 3),
                                   padding = 'same', strides=(2, 2)))
+        model.add(BatchNormalization())
         model.add(Activation('relu'))
 
     # number of feature maps => number of image channels
@@ -70,17 +73,20 @@ def discriminator(input_size):
     
     dim = 4
     model.add(Dense(dim * dim * 16, input_shape=input_size))
-
+    
+    model.add(BatchNormalization())
     # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * features)
     features = 64
     while img_height > dim:
         dim *= 2
         features *= 2
         model.add(Conv2D(features, (3, 3), padding='same', strides=(2, 2)))
+        model.add(BatchNormalization())
         model.add(LeakyReLU())
 
     model.add(Flatten())
     model.add(Dense(16))
+    model.add(BatchNormalization())
     model.add(LeakyReLU())
     model.add(Dense(1, activation='sigmoid'))
 
