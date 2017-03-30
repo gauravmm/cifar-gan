@@ -37,6 +37,7 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
     model.add(Dense(dim * dim * 16, input_shape=input_size))
     model.add(Activation('relu'))
     model.add(layers.Reshape((dim, dim, -1)))
+
     features = 512
     while dim != img_height:
         dim *= 2
@@ -46,6 +47,7 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
                                   padding = 'same', strides=(2, 2)))
         model.add(Activation('relu'))
         model.add(Dropout(0.5))
+
     # number of feature maps => number of image channels
     model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
     
@@ -76,6 +78,7 @@ def discriminator(input_size):
         features *= 2
         model.add(Conv2D(features, (3, 3), padding='same', strides=(2, 2)))
         model.add(LeakyReLU())
+
     model.add(Flatten())
     model.add(Dense(16))
     model.add(LeakyReLU())
