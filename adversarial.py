@@ -180,12 +180,13 @@ def main(args):
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
+                fmt_metric = lambda x: ", ".join(str(v) for v in x)
                 print("{}, {}, {}, {}, {}".format(
                     datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
                     batch,
-                    intv_com_loss,
-                    intv_dis_loss_real,
-                    intv_dis_loss_fake), file=csvfile)
+                    fmt_metric(intv_com_loss),
+                    fmt_metric(intv_dis_loss_real),
+                    fmt_metric(intv_dis_loss_fake)), file=csvfile)
             
             # Zero out the running counters
             intv_com_loss[...]      = 0
