@@ -32,6 +32,7 @@ np.random.seed(54183)
 
 # Logging
 logging.getLogger("tensorflow").setLevel(logging.WARNING)
+support._make_path(config.PATH['logs'])
 logging.basicConfig(filename=os.path.join(config.PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
