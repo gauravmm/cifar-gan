@@ -12,6 +12,7 @@ import sys
 import numpy as np
 
 import config
+import keras.backend as K
 from config import IMAGE_GUTTER
 from typing import Tuple
 
@@ -20,6 +21,9 @@ logger = logging.getLogger()
 #
 # Data
 #
+
+Y_REAL = 0
+Y_FAKE = 1
 
 class Data(object):
     def __init__(self, args):
@@ -42,11 +46,11 @@ class Data(object):
 
         # Use to label a discriminator batch as real
         self._label_dis_real = map(lambda a, b: a + b,
-                              _value_stream(args.hyperparam.batch_size, 0),
+                              _value_stream(args.hyperparam.batch_size, Y_REAL),
                               _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.batch_size)))
         # Use to label a discriminator batch as fake
         self._label_dis_fake = map(lambda a, b: a + b,
-                              _value_stream(args.hyperparam.batch_size, 1),
+                              _value_stream(args.hyperparam.batch_size, Y_FAKE),
                               _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
         # Random flipping support
         self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
@@ -54,7 +58,21 @@ class Data(object):
         self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
                                                 self._label_dis_fake, self._label_dis_real)
         # Use to label a generator batch as real
-        self.label_gen_real = _value_stream(args.hyperparam.batch_size, 1)
+        self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+
+#
+# Accuracy metric
+#
+
+def _accuracy_metric(value):
+    # We evaluate k == value, but with only tensor operations.
+    return lambda k: 1 - K.abs(K.clip(K.round(k), 0., 1.) - value)
+
+METRICS = {
+    REAL: _accuracy_metric(Y_REAL),
+    FAKE: _accuracy_metric(Y_FAKE)
+}
+
 
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for

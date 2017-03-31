@@ -77,12 +77,12 @@ def main(args):
     com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
 
     gen_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy')
-    dis_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+    dis_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=support.METRICS)
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
     dis_model.trainable = False 
-    com_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+    com_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=support.METRICS)
 
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
