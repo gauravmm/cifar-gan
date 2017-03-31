@@ -68,11 +68,15 @@ def _accuracy_metric(value):
     # We evaluate k == value, but with only tensor operations.
     return lambda k: 1 - K.abs(K.clip(K.round(k), 0., 1.) - value)
 
-METRICS = {
-    REAL: _accuracy_metric(Y_REAL),
-    FAKE: _accuracy_metric(Y_FAKE)
-}
+def is_real(k):
+    assert Y_REAL == 0
+    return 1 - K.clip(K.round(k), 0., 1.)
 
+def is_fake(k):
+    assert Y_FAKE == 1
+    return K.clip(K.round(k), 0., 1.)
+
+METRICS = [is_real, is_fake]
 
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
