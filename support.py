@@ -54,9 +54,9 @@ class Data(object):
                               _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
         # Random flipping support
         self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                self._label_dis_real, self._label_dis_fake)
-        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
                                                 self._label_dis_fake, self._label_dis_real)
+        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
+                                                self._label_dis_real, self._label_dis_fake)
         # Use to label a generator batch as real
         self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
@@ -68,15 +68,15 @@ def _accuracy_metric(value):
     # We evaluate k == value, but with only tensor operations.
     return lambda k: 1 - K.abs(K.clip(K.round(k), 0., 1.) - value)
 
-def is_real(k):
+def label_real(y_true, y_pred):
     assert Y_REAL == 0
-    return 1 - K.clip(K.round(k), 0., 1.)
+    return 1 - K.round(K.clip(y_pred, 0., 1.))
 
-def is_fake(k):
+def label_fake(y_true, y_pred):
     assert Y_FAKE == 1
-    return K.clip(K.round(k), 0., 1.)
+    return K.round(K.clip(y_pred, 0., 1.))
 
-METRICS = [is_real, is_fake]
+METRICS = [label_real, label_fake]
 
 # TODO: Support reading test data.
 # TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
