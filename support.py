@@ -1,6 +1,7 @@
 # Data support functions
 
 import argparse
+import errno
 import functools
 import glob
 import importlib
@@ -179,6 +180,13 @@ def _get_latest_glob(blob):
     idx = [int(b[ltrunc:rtrunc]) for b in blobs]
     return sorted(zip(idx, blobs), reverse=True)[0]
 
+def _make_path(path):
+    try:
+        os.makedirs(path)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+
 def resume(args, gen_model, dis_model):
     try:
         # Load files as necessary
@@ -201,6 +209,9 @@ def resume(args, gen_model, dis_model):
         return None
 
 def clear(args):
+    _make_path(config.PATH["weights"])
+    _make_path(config.PATH["images"])
+
     # Delete old weight checkpoints
     for f in itertools.chain(glob.glob(config.get_filename('weight', args)),
                              glob.glob(config.get_filename('image',  args))):

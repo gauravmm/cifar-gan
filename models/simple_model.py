@@ -48,6 +48,7 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
         model.add(Conv2DTranspose(features, (3, 3),
                                   padding = 'same', strides=(2, 2)))
         model.add(LeakyReLU(alpha))
+        model.add(Dropout(0.5))
 
     # number of feature maps => number of image channels
     model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
@@ -72,7 +73,6 @@ def discriminator(input_size):
     
     dim = 4
     model.add(Dense(dim * dim * 16, input_shape=input_size))
-
     # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * features)
     features = 64
     while img_height > dim:
