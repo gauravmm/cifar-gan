@@ -19,6 +19,8 @@ NAME="Simple"
 SEED_DIM = (32,)
 # Size of the output. The generator, discriminator and dataset will be required to use this size.
 IMAGE_DIM = (32, 32, 3)
+#leaky relu coefficient
+alpha = 0.3
 
 def generator(input_size, output_size) -> layers.convolutional._Conv:
     # We only allow the discriminator model to work on CIFAR-sized data.
@@ -35,7 +37,7 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
     model = Sequential()
 
     model.add(Dense(dim * dim * 16, input_shape=input_size))
-    model.add(Activation('relu'))
+    model.add(LeakyReLU(alpha))
     model.add(layers.Reshape((dim, dim, -1)))
 
     features = 512
@@ -45,7 +47,8 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
         
         model.add(Conv2DTranspose(features, (3, 3),
                                   padding = 'same', strides=(2, 2)))
-        model.add(Activation('relu'))
+        model.add(LeakyReLU(alpha))
+        model.add(Dropout(0.5))
 
     # number of feature maps => number of image channels
     model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
@@ -70,18 +73,17 @@ def discriminator(input_size):
     
     dim = 4
     model.add(Dense(dim * dim * 16, input_shape=input_size))
-
     # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * features)
     features = 64
     while img_height > dim:
         dim *= 2
         features *= 2
         model.add(Conv2D(features, (3, 3), padding='same', strides=(2, 2)))
-        model.add(LeakyReLU())
+        model.add(LeakyReLU(alpha))
 
     model.add(Flatten())
     model.add(Dense(16))
-    model.add(LeakyReLU())
+    model.add(LeakyReLU(alpha))
     model.add(Dense(1, activation='sigmoid'))
 
     return model
