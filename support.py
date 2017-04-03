@@ -111,8 +111,8 @@ def _data_stream(dataset, batch_size : int):
     return data_gen
 
 # Produces a stream of random data
-def _random_stream(batch_size : int, img_size : Tuple[int, int, int]):
-    sz = [batch_size, *img_size]
+def _random_stream(batch_size : int, img_size):
+    sz = [batch_size] + list(img_size)
     while True:
         yield np.random.normal(size=sz)
 
