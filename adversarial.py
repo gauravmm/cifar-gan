@@ -32,6 +32,7 @@ np.random.seed(54183)
 
 # Logging
 logging.getLogger("tensorflow").setLevel(logging.WARNING)
+support._make_path(config.PATH['logs'])
 logging.basicConfig(filename=os.path.join(config.PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
@@ -76,13 +77,13 @@ def main(args):
     dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
     com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
 
-    gen_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy')
-    dis_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+    gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
+    dis_model.compile(optimizer=args.hyperparam.optimizer_dis, loss='binary_crossentropy', metrics=['accuracy'])
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
-    dis_model.trainable = False 
-    com_model.compile(optimizer=args.hyperparam.optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+    dis_model.trainable = False
+    com_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy', metrics=['accuracy'])
 
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
@@ -180,12 +181,13 @@ def main(args):
 
             # Log to CSV
             with open(config.get_filename('csv', args), 'a') as csvfile:
+                fmt_metric = lambda x: ", ".join(str(v) for v in x)
                 print("{}, {}, {}, {}, {}".format(
                     datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
                     batch,
-                    intv_com_loss,
-                    intv_dis_loss_real,
-                    intv_dis_loss_fake), file=csvfile)
+                    fmt_metric(intv_com_loss),
+                    fmt_metric(intv_dis_loss_real),
+                    fmt_metric(intv_dis_loss_fake)), file=csvfile)
             
             # Zero out the running counters
             intv_com_loss[...]      = 0
