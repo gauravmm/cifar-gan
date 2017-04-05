@@ -139,8 +139,8 @@ def main(args):
     # Format the score printing
     print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
 
-    for batch in range(batch, args.hyperparam.halt_batches):
-        logger.debug('Step {} of {}.'.format(batch, args.hyperparam.halt_batches))
+    for batch in range(batch, args.batches):
+        logger.debug('Step {} of {}.'.format(batch, args.batches))
 
         # This training proceeds in two phases: (1) discriminator, then (2) generator.
         # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
@@ -167,7 +167,7 @@ def main(args):
         # That is the entire training algorithm.
         # Produce output every interval:
         if not batch % args.log_interval and batch != 0:
-            logger.info("Completed batch {}/{}".format(batch, args.hyperparam.halt_batches))
+            logger.info("Completed batch {}/{}".format(batch, args.batches))
 
             # Compute the average loss over this interval
             intv_com_loss      /= args.log_interval * args.hyperparam.generator_per_step

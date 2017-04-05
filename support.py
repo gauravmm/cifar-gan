@@ -263,6 +263,8 @@ def argparser():
         help="the number of columns to group produced images into")        
     parser.add_argument('--resume', action='store_const', const=True, default=False,
         help='attempt to load saved weights and continue training')
+    parser.add_argument('--batches', default=config.NUM_BATCHES_DEFAULT, type=int,
+        help='the last batch number to process')
 
     parser.add_argument('--data', default="cifar10",
         type=dynLoadModule("data"),
