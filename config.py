@@ -3,6 +3,7 @@
 import os
 
 LOG_INTERVAL_DEFAULT = 500
+NUM_BATCHES_DEFAULT = 5000
 
 PATH = {
     "__main__": os.path.dirname(os.path.abspath(__file__)),
