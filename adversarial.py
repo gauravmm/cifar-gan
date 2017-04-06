@@ -135,10 +135,13 @@ def main(args):
     intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
     intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
+    intv_com_count = 0
+    intv_dis_count = 0
 
     # Format the score printing
     print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
 
+    metric_wrap = lambda x: {k:v for k, v in zip(com_model.metrics_names, x)}
     for batch in range(batch, args.batches):
         logger.debug('Step {} of {}.'.format(batch, args.batches))
 
@@ -146,14 +149,23 @@ def main(args):
         # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
         # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
         # distinguish between "fake"" (generated) and real images by running it on one step of each.
-        for _ in range(args.hyperparam.discriminator_per_step):
+        
+        step_dis = 0
+        while True:
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            intv_dis_loss_fake += dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
-                                                           next(data.label_dis_fake))
+            loss_fake = dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
+                                                 next(data.label_dis_fake))
+            intv_dis_loss_fake += loss_fake
             # Use real images, and train the model to predict them as real.
-            intv_dis_loss_real += dis_model.train_on_batch(next(data.real),
-                                                           next(data.label_dis_real))
+            loss_real = dis_model.train_on_batch(next(data.real),
+                                                 next(data.label_dis_real))
+            intv_dis_loss_real += loss_real
+
+            intv_dis_count += 1
+            step_dis += 1
+            if args.hyperparam.discriminator_halt(batch, step_dis, metric_wrap(loss_fake), metric_wrap(loss_real)):
+                break
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
         # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
@@ -161,8 +173,17 @@ def main(args):
         # In this step, we train "generator" so that "discriminator(generator(random)) == real". Specifically, we compose
         # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
         # as real.
-        for _ in range(args.hyperparam.generator_per_step):
-            intv_com_loss += com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
+        step_com = 0
+        while True:
+            loss = com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
+            intv_com_loss += loss[0]
+            
+            intv_com_count += 1
+            step_com += 1
+            if args.hyperparam.generator_halt(batch, step_com, metric_wrap(loss)):
+                break
+
+        logger.debug("In batch {}, dis was trained for {} steps, and gen for {}.".format(batch, step_dis, step_com))
 
         # That is the entire training algorithm.
         # Produce output every interval:
@@ -170,9 +191,9 @@ def main(args):
             logger.info("Completed batch {}/{}".format(batch, args.batches))
 
             # Compute the average loss over this interval
-            intv_com_loss      /= args.log_interval * args.hyperparam.generator_per_step
-            intv_dis_loss_fake /= args.log_interval * args.hyperparam.discriminator_per_step
-            intv_dis_loss_real /= args.log_interval * args.hyperparam.discriminator_per_step
+            intv_com_loss      /= (args.log_interval * intv_com_count)
+            intv_dis_loss_fake /= (args.log_interval * intv_dis_count)
+            intv_dis_loss_real /= (args.log_interval * intv_dis_count)
 
             # Log a summary
             logger.info("Generator; {}.".format(print_score(intv_com_loss)))
@@ -193,6 +214,8 @@ def main(args):
             intv_com_loss[...]      = 0
             intv_dis_loss_fake[...] = 0
             intv_dis_loss_real[...] = 0
+            intv_com_count = 0
+            intv_dis_count = 0
 
             # Write image
             img_fn = config.get_filename('image', args, batch)
