@@ -4,11 +4,9 @@ import numpy as np
 from keras import optimizers
 
 # As described in appendix A of DeepMind's AC-GAN paper
-optimizer_gen = optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-optimizer_dis = optimizers.SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=False)
+optimizer_gen = optimizers.Adam(lr=0.0005, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=0.0)
+optimizer_dis = optimizers.SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=False)
 batch_size   = 128
-discriminator_per_step = 1
-generator_per_step     = 4
 
 # This specifies the probability of a label being flipped, which allows the true and fake distributions to overlap
 # to allow the GAN to discover this. There's an argument that (1) the space of good solutions is large and flat (i.e. 
@@ -23,3 +21,35 @@ label_flipping_prob = 0.05
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 # To disable label smoothing noise, just replace it with:
 #   lambda is_real, sz: 0
+
+class StepHalt(object):
+    def __init__(self):
+        self.discriminator_precision = 0.60
+        self.generator_precision = 0.60
+        self.min_step = 1
+        self.max_step = 5
+
+    def discriminator_halt(self, batch, step, loss_fake, loss_real):
+        # Batch refers to the number of times the discriminator, then generator would be training.
+        # Step is the number of times the discriminator has been run within that batch
+        # Loss metric the loss in the previous iteration, as a key:value dict.
+        if step < self.min_step:
+            return False
+        if step > self.max_step:
+            return True
+        if loss_fake["label_fake"] >= self.discriminator_precision and loss_real["label_real"] >= self.discriminator_precision:
+            return True
+        return False
+
+    def generator_halt(self, batch, step, loss):
+        if step < self.min_step:
+            return False
+        if step > self.max_step:
+            return True
+        if loss["label_real"] >= self.generator_precision:
+            return True
+        return False
+
+_halting = StepHalt()
+discriminator_halt = _halting.discriminator_halt
+generator_halt     = _halting.generator_halt
