@@ -176,7 +176,7 @@ def main(args):
         step_com = 0
         while True:
             loss = com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
-            intv_com_loss += loss[0]
+            intv_com_loss += loss
             
             intv_com_count += 1
             step_com += 1
