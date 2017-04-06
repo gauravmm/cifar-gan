@@ -186,8 +186,9 @@ def main(args):
         logger.debug("In batch {}, dis was trained for {} steps, and gen for {}.".format(batch, step_dis, step_com))
 
         # That is the entire training algorithm.
-        # Produce output every interval:
-        if not batch % args.log_interval and batch != 0:
+        # Produce output every interval. We increment batch number because we have just finished the batch.
+        batch += 1
+        if not batch % args.log_interval:
             logger.info("Completed batch {}/{}".format(batch, args.batches))
 
             # Compute the average loss over this interval
