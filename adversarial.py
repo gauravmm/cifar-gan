@@ -192,9 +192,9 @@ def main(args):
             logger.info("Completed batch {}/{}".format(batch, args.batches))
 
             # Compute the average loss over this interval
-            intv_com_loss      /= (args.log_interval * intv_com_count)
-            intv_dis_loss_fake /= (args.log_interval * intv_dis_count)
-            intv_dis_loss_real /= (args.log_interval * intv_dis_count)
+            intv_com_loss      /= intv_com_count
+            intv_dis_loss_fake /= intv_dis_count
+            intv_dis_loss_real /= intv_dis_count
 
             # Log a summary
             logger.info("Generator; {}.".format(print_score(intv_com_loss)))
