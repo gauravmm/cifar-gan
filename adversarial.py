@@ -195,11 +195,11 @@ def main(args):
         with open(config.get_filename('csv', args), 'a') as csvfile:
             fmt_metric = lambda x: ", ".join(str(v) for v in x)
             print("{}, {}, {}, {}, {}, {}, {}".format(
-                time.time(),
+                int(time.time()),
                 batch,
-                fmt_metric(intv_com_loss / step_com),
-                fmt_metric(intv_dis_loss_real / step_dis),
-                fmt_metric(intv_dis_loss_fake / step_dis),
+                fmt_metric(step_com_loss / step_com),
+                fmt_metric(step_dis_loss_real / step_dis),
+                fmt_metric(step_dis_loss_fake / step_dis),
                 step_dis,
                 step_com), file=csvfile)
         
