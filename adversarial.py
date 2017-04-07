@@ -194,7 +194,7 @@ def main(args):
         with open(config.get_filename('csv', args), 'a') as csvfile:
             fmt_metric = lambda x: ", ".join(str(v) for v in x)
             print("{}, {}, {}, {}, {}, {}, {}".format(
-                datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
+                time.time(),
                 batch,
                 fmt_metric(intv_com_loss),
                 fmt_metric(intv_dis_loss_real),
