@@ -197,17 +197,17 @@ def main(args):
             print("{}, {}, {}, {}, {}, {}, {}".format(
                 time.time(),
                 batch,
-                fmt_metric(intv_com_loss),
-                fmt_metric(intv_dis_loss_real),
-                fmt_metric(intv_dis_loss_fake),
+                fmt_metric(intv_com_loss / step_com),
+                fmt_metric(intv_dis_loss_real / step_dis),
+                fmt_metric(intv_dis_loss_fake / step_dis),
                 step_dis,
                 step_com), file=csvfile)
         
         intv_dis_count += step_dis
-        intv_dis_loss_fake += loss_fake
-        intv_dis_loss_real += loss_real
+        intv_dis_loss_fake += step_dis_loss_fake
+        intv_dis_loss_real += step_dis_loss_real
         
-        intv_com_loss += loss
+        intv_com_loss += step_com_loss
         intv_com_count += step_com
         
         # Produce output every args.log_interval. We increment batch number because we have just finished the batch.
