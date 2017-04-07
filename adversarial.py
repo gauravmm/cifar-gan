@@ -109,8 +109,9 @@ def main(args):
         # Write CSV file headers
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
-                                            for b in com_model.metrics_names
-                                            for a in ["composite", "discriminator+real", "discriminator+fake"]),
+                                            for a in ["composite", "discriminator+real", "discriminator+fake"]
+                                            for b in com_model.metrics_names) +
+                  ", discriminator_steps, generator_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
@@ -139,8 +140,8 @@ def main(args):
     intv_dis_count = 0
 
     # Format the score printing
+    zero_loss = lambda: np.asarray([0. for _ in com_model.metrics_names], dtype=np.float16)
     print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
-
     metric_wrap = lambda x: {k:v for k, v in zip(com_model.metrics_names, x)}
     for batch in range(batch, args.batches):
         logger.debug('Step {} of {}.'.format(batch, args.batches))
@@ -151,18 +152,19 @@ def main(args):
         # distinguish between "fake"" (generated) and real images by running it on one step of each.
         
         step_dis = 0
+        step_dis_loss_fake = zero_loss()
+        step_dis_loss_real = zero_loss()
         while True:
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
             loss_fake = dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
                                                  next(data.label_dis_fake))
-            intv_dis_loss_fake += loss_fake
+            step_dis_loss_fake += loss_fake
             # Use real images, and train the model to predict them as real.
             loss_real = dis_model.train_on_batch(next(data.real),
                                                  next(data.label_dis_real))
-            intv_dis_loss_real += loss_real
+            step_dis_loss_real += loss_real
 
-            intv_dis_count += 1
             step_dis += 1
             if args.hyperparam.discriminator_halt(batch, step_dis, metric_wrap(loss_fake), metric_wrap(loss_real)):
                 break
@@ -174,19 +176,41 @@ def main(args):
         # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
         # as real.
         step_com = 0
+        step_com_loss = zero_loss()
         while True:
             loss = com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
-            intv_com_loss += loss[0]
+            step_com_loss += loss
             
-            intv_com_count += 1
             step_com += 1
             if args.hyperparam.generator_halt(batch, step_com, metric_wrap(loss)):
                 break
 
         logger.debug("In batch {}, dis was trained for {} steps, and gen for {}.".format(batch, step_dis, step_com))
 
+        #
         # That is the entire training algorithm.
-        # Produce output every interval. We increment batch number because we have just finished the batch.
+        #
+
+        # Log to CSV
+        with open(config.get_filename('csv', args), 'a') as csvfile:
+            fmt_metric = lambda x: ", ".join(str(v) for v in x)
+            print("{}, {}, {}, {}, {}, {}, {}".format(
+                int(time.time()),
+                batch,
+                fmt_metric(step_com_loss / step_com),
+                fmt_metric(step_dis_loss_real / step_dis),
+                fmt_metric(step_dis_loss_fake / step_dis),
+                step_dis,
+                step_com), file=csvfile)
+        
+        intv_dis_count += step_dis
+        intv_dis_loss_fake += step_dis_loss_fake
+        intv_dis_loss_real += step_dis_loss_real
+        
+        intv_com_loss += step_com_loss
+        intv_com_count += step_com
+        
+        # Produce output every args.log_interval. We increment batch number because we have just finished the batch.
         batch += 1
         if not batch % args.log_interval:
             logger.info("Completed batch {}/{}".format(batch, args.batches))
@@ -201,16 +225,6 @@ def main(args):
             logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real)))
             logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake)))
 
-            # Log to CSV
-            with open(config.get_filename('csv', args), 'a') as csvfile:
-                fmt_metric = lambda x: ", ".join(str(v) for v in x)
-                print("{}, {}, {}, {}, {}".format(
-                    datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
-                    batch,
-                    fmt_metric(intv_com_loss),
-                    fmt_metric(intv_dis_loss_real),
-                    fmt_metric(intv_dis_loss_fake)), file=csvfile)
-            
             # Zero out the running counters
             intv_com_loss[...]      = 0
             intv_dis_loss_fake[...] = 0
