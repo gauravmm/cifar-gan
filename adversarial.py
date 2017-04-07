@@ -109,9 +109,9 @@ def main(args):
         # Write CSV file headers
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
-                                            for b in com_model.metrics_names
-                                            for a in ["composite", "discriminator+real", "discriminator+fake"]) +
-                  "discriminator_steps" + "generator_steps",
+                                            for a in ["composite", "discriminator+real", "discriminator+fake"]
+                                            for b in com_model.metrics_names) +
+                  ", discriminator_steps, generator_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
@@ -140,7 +140,7 @@ def main(args):
     intv_dis_count = 0
 
     # Format the score printing
-    zero_loss = np.asarray([0. for _ in com_model.metrics_names], dtype=np.float16)
+    zero_loss = lambda: np.asarray([0. for _ in com_model.metrics_names], dtype=np.float16)
     print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
     metric_wrap = lambda x: {k:v for k, v in zip(com_model.metrics_names, x)}
     for batch in range(batch, args.batches):
@@ -152,8 +152,8 @@ def main(args):
         # distinguish between "fake"" (generated) and real images by running it on one step of each.
         
         step_dis = 0
-        step_dis_loss_fake = zero_loss
-        step_dis_loss_real = zero_loss
+        step_dis_loss_fake = zero_loss()
+        step_dis_loss_real = zero_loss()
         while True:
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
@@ -176,7 +176,7 @@ def main(args):
         # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
         # as real.
         step_com = 0
-        step_com_loss = zero_loss
+        step_com_loss = zero_loss()
         while True:
             loss = com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
             step_com_loss += loss

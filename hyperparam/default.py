@@ -24,11 +24,11 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 
 class StepHalt(object):
     def __init__(self):
-        self.discriminator_loss = 0.60
-        self.generator_loss = 0.60
+        self.discriminator_correct = 0.60
+        self.generator_correct = 0.60
         self.min_step_dis = 1
-        self.max_step_dis = 2
-        self.min_step_gen = 3
+        self.max_step_dis = 3
+        self.min_step_gen = 4
         self.max_step_gen = 12
 
     def discriminator_halt(self, batch, step, loss_fake, loss_real):
@@ -37,19 +37,23 @@ class StepHalt(object):
         # Loss metric the loss in the previous iteration, as a key:value dict.
         if step < self.min_step_dis:
             return False
-        if step >= self.max_step_dis:
+        if step + 1 >= self.max_step_dis:
             return True
-        if (loss_fake["loss"] + loss_real["loss"])/2 < self.discriminator_loss:
+        if (loss_fake["label_fake"] + loss_real["label_real"])/2 < self.discriminator_correct:
             return True
+        #if (loss_fake["loss"] + loss_real["loss"])/2 < self.discriminator_loss:
+        #    return True
         return False
 
     def generator_halt(self, batch, step, loss):
         if step < self.min_step_gen:
             return False
-        if step >= self.max_step_gen:
+        if step + 1 >= self.max_step_gen:
             return True
-        if loss["loss"] < self.generator_loss:
+        if loss["label_real"] < self.generator_correct:
             return True
+        #if loss["loss"] < self.generator_loss:
+        #    return True
         return False
 
 _halting = StepHalt()
