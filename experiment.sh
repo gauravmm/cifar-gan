@@ -6,6 +6,6 @@ python3 adversarial.py           \
     --generator     simple_model \
     --discriminator simple_model \
     --log-interval 50            \
-    --batches 5000               \
+    --batches 2500               \
     --image-columns 4            \
     train

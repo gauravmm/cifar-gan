@@ -110,7 +110,8 @@ def main(args):
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
                                             for b in com_model.metrics_names
-                                            for a in ["composite", "discriminator+real", "discriminator+fake"]),
+                                            for a in ["composite", "discriminator+real", "discriminator+fake"]) +
+                  "discriminator_steps" + "generator_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
@@ -185,8 +186,30 @@ def main(args):
 
         logger.debug("In batch {}, dis was trained for {} steps, and gen for {}.".format(batch, step_dis, step_com))
 
+        #
         # That is the entire training algorithm.
-        # Produce output every interval. We increment batch number because we have just finished the batch.
+        #
+
+        # Log to CSV
+        with open(config.get_filename('csv', args), 'a') as csvfile:
+            fmt_metric = lambda x: ", ".join(str(v) for v in x)
+            print("{}, {}, {}, {}, {}, {}, {}".format(
+                datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
+                batch,
+                fmt_metric(intv_com_loss),
+                fmt_metric(intv_dis_loss_real),
+                fmt_metric(intv_dis_loss_fake),
+                step_dis,
+                step_com), file=csvfile)
+        
+        # Zero out the running counters
+        intv_com_loss[...]      = 0
+        intv_dis_loss_fake[...] = 0
+        intv_dis_loss_real[...] = 0
+        intv_com_count = 0
+        intv_dis_count = 0
+
+        # Produce output every args.log_interval. We increment batch number because we have just finished the batch.
         batch += 1
         if not batch % args.log_interval:
             logger.info("Completed batch {}/{}".format(batch, args.batches))
@@ -200,23 +223,6 @@ def main(args):
             logger.info("Generator; {}.".format(print_score(intv_com_loss)))
             logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real)))
             logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake)))
-
-            # Log to CSV
-            with open(config.get_filename('csv', args), 'a') as csvfile:
-                fmt_metric = lambda x: ", ".join(str(v) for v in x)
-                print("{}, {}, {}, {}, {}".format(
-                    datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S'),
-                    batch,
-                    fmt_metric(intv_com_loss),
-                    fmt_metric(intv_dis_loss_real),
-                    fmt_metric(intv_dis_loss_fake)), file=csvfile)
-            
-            # Zero out the running counters
-            intv_com_loss[...]      = 0
-            intv_dis_loss_fake[...] = 0
-            intv_dis_loss_real[...] = 0
-            intv_com_count = 0
-            intv_dis_count = 0
 
             # Write image
             img_fn = config.get_filename('image', args, batch)

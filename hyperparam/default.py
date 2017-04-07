@@ -4,8 +4,8 @@ import numpy as np
 from keras import optimizers
 
 # As described in appendix A of DeepMind's AC-GAN paper
-optimizer_gen = optimizers.Adam(lr=0.0005, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=0.0)
-optimizer_dis = optimizers.SGD(lr=0.0005, decay=1e-6, momentum=0.9, nesterov=False)
+optimizer_gen = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
+optimizer_dis = optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
 batch_size   = 128
 
 # This specifies the probability of a label being flipped, which allows the true and fake distributions to overlap
@@ -29,7 +29,7 @@ class StepHalt(object):
         self.min_step_dis = 1
         self.max_step_dis = 2
         self.min_step_gen = 3
-        self.max_step_gen = 8
+        self.max_step_gen = 12
 
     def discriminator_halt(self, batch, step, loss_fake, loss_real):
         # Batch refers to the number of times the discriminator, then generator would be training.
