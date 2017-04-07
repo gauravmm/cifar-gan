@@ -5,7 +5,8 @@ from keras import optimizers
 
 # As described in appendix A of DeepMind's AC-GAN paper
 optimizer_gen = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
-optimizer_dis = optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
+optimizer_dis = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
+#optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
 batch_size   = 128
 
 # This specifies the probability of a label being flipped, which allows the true and fake distributions to overlap
@@ -57,5 +58,5 @@ class StepHalt(object):
         return False
 
 _halting = StepHalt()
-discriminator_halt = _halting.discriminator_halt
-generator_halt     = _halting.generator_halt
+discriminator_halt = lambda b, s, l1, l2: s >= 1 # _halting.discriminator_halt
+generator_halt     = lambda b, s, l: s >= 4 # _halting.generator_halt
