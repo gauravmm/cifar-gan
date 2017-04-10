@@ -22,13 +22,12 @@ IMAGE_DIM = (32, 32, 3)
 #leaky relu coefficient
 alpha = 0.3
 
-def generator(input_size, output_size) -> layers.convolutional._Conv:
+def generator(input_size, output_size) -> Tuple[layers.convolutional._Conv, layers.convolutional._Conv]:
     # We only allow the discriminator model to work on CIFAR-sized data.
     assert output_size == (32, 32, 3)
     (img_height, img_width, img_channels) = output_size
 
-    dim = 4
-    assert img_height % dim == 0 and img_width % dim == 0, \
+    assert img_height % 4 == 0 and img_width % 4 == 0, \
         'Generator network must be able to transform `x` into a tensor of shape (img_height, img_width, img_channels).'
 
     #
@@ -36,21 +35,19 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
     #
     model = Sequential()
 
-    model.add(Dense(dim * dim * 16, input_shape=input_size))
+    model.add(Dense(256, input_shape=input_size))
     model.add(LeakyReLU(alpha))
-    model.add(layers.Reshape((dim, dim, -1)))
+    model.add(layers.Reshape((4, 4, -1)))
 
-    features = 512
-    while dim != img_height:
-        dim *= 2
-        features //= 2
-        
-        model.add(Conv2DTranspose(features, (3, 3),
-                                  padding = 'same', strides=(2, 2)))
-        model.add(LeakyReLU(alpha))
-        model.add(Dropout(0.5))
+    model.add(Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)))
+    model.add(LeakyReLU(alpha))
 
-    # number of feature maps => number of image channels
+    model.add(Conv2DTranspose(128, (3, 3), padding = 'same', strides=(2, 2)))
+    model.add(LeakyReLU(alpha))
+    
+    model.add(Conv2DTranspose(64, (3, 3), padding = 'same', strides=(2, 2)))
+    model.add(LeakyReLU(alpha))
+
     model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
     
     return model
@@ -71,15 +68,17 @@ def discriminator(input_size):
 
     model = Sequential()
     
-    dim = 4
-    model.add(Dense(dim * dim * 16, input_shape=input_size))
+    model.add(Dense(256, input_shape=input_size))
     # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * features)
-    features = 64
-    while img_height > dim:
-        dim *= 2
-        features *= 2
-        model.add(Conv2D(features, (3, 3), padding='same', strides=(2, 2)))
-        model.add(LeakyReLU(alpha))
+    
+    model.add(Conv2D(128, (3, 3), padding='same', strides=(2, 2)))
+    model.add(LeakyReLU(alpha))
+    
+    model.add(Conv2D(256, (3, 3), padding='same', strides=(2, 2)))
+    model.add(LeakyReLU(alpha))
+
+    model.add(Conv2D(512, (3, 3), padding='same', strides=(2, 2)))
+    model.add(LeakyReLU(alpha))
 
     model.add(Flatten())
     model.add(Dense(16))
