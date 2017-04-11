@@ -21,12 +21,12 @@ rm -r "weights"
 
 for commithash in "$@"
 do
-    if [ -f experiment.sh ]; then
+    if [ ! -f experiment.sh ]; then
         echo "$(date) Skipping $commithash, experiment.sh not found." >> "$EXP_LOG"
         continue
     fi
 
-    expdir = "$EXP_DIR/$commithash"
+    expdir="$EXP_DIR/$commithash"
 
     if [ -e "$expdir" ]; then
         echo "$(date) Skipping $commithash, $expdir already exists." >> "$EXP_LOG"
