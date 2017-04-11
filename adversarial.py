@@ -160,8 +160,8 @@ def main(args):
             loss_fake = dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
                                                  next(data.label_dis_fake))
             step_dis_loss_fake += loss_fake
-            # Use real images, and train the model to predict them as real.
-            loss_real = dis_model.train_on_batch(next(data.real),
+            # Use real images (but not labels), and train the model to predict them as real.
+            loss_real = dis_model.train_on_batch(next(data.real[0]),
                                                  next(data.label_dis_real))
             step_dis_loss_real += loss_real
 

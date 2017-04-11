@@ -28,21 +28,17 @@ Y_FAKE = 1
 
 class Data(object):
     def __init__(self, args):
-        train_data, train_labels = args.data.get_data("train")
         logger.info("Training data loaded from disk.")
 
-        train = zip(_data_stream(train_data, args.hyperparam.batch_size), _data_stream(train_labels, args.hyperparam.batch_size))
-
+        train = args.data.get_data("train", args.hyperparam.batch_size)
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         for p in args.preprocessor:
             train = itertools.starmap(p.apply, train)
-        # Only keep the images, discard the labels
-        train = map(lambda x: x[0], train)
+            logger.info("Applied preprocessor {}.".format(p.__name__))
         
         self.rand_vec = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
         # Present images them in chunks of exactly batch-size:
         self.real     = _image_stream_batch(train, args.hyperparam.batch_size)
-        self.raw      = (train_data, train_labels)
         self.unapply  = functools.reduce(lambda f, g: lambda x: f(g(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
 
         # Use to label a discriminator batch as real
@@ -87,28 +83,16 @@ METRICS = [label_real, label_fake]
 # A generator that enforces the batch-size of the input. Used to feed keras the right amount of data even with data 
 # augmentation increasing the batch size.
 def _image_stream_batch(itr, batch_size):
-    remainder = next(itr)
+    rx, ry = next(itr)
     while True:
-        while remainder.shape[0] < batch_size:
-            remainder = np.concatenate((remainder, next(itr)))
-        yield remainder[:batch_size,...]
-        remainder = remainder[batch_size:,...]
-
-def _data_stream(dataset, batch_size : int):
-    # The first index of the next batch:
-    i = 0 # Type: int
-    
-    while True:
-        j = i + batch_size
-        # If we wrap around the back of the dataset:
-        if j >= dataset.shape[0]:
-            x = list(range(i, dataset.shape[0])) + list(range(0, j - dataset.shape[0]))
-            yield dataset[x,...]
-            i = j - dataset.shape[0]
-        else:
-            yield dataset[i:j,...]
-            i = j
-    return data_gen
+        assert rx.shape[0] == ry.shape[0]
+        while rx.shape[0] < batch_size:
+            ax, ay = next(itr)
+            rx = np.concatenate((rx, ax))
+            ry = np.concatenate((ry, ay))
+        yield (rx[:batch_size,...], ry[:batch_size,...])
+        rx = rx[batch_size:,...]
+        ry = ry[batch_size:,...]
 
 # Produces a stream of random data
 def _random_stream(batch_size : int, img_size):
