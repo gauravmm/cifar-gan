@@ -31,6 +31,10 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 # To disable label smoothing noise, just replace it with:
 #   lambda is_real, sz: 0
 
+# The relative weight assigned to the discriminator and classifier when training.
+loss_weights = {'discriminator': 1.0, 'classifier': 1.0}
+loss_func    = {'discriminator': 'binary_crossentropy', 'classifier': 'binary_crossentropy'}
+
 class StepHalt(object):
     def __init__(self):
         self.discriminator_correct = 0.60

@@ -30,17 +30,19 @@ class Data(object):
     def __init__(self, args):
         logger.info("Training data loaded from disk.")
 
-        train = args.data.get_data("train", args.hyperparam.batch_size)
+        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
-        self.unapply  = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
+        self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
         for p in args.preprocessor:
-            train = itertools.starmap(p.apply, train)
+            unlabelled = itertools.starmap(p.apply, unlabelled)
+            labelled   = itertools.starmap(p.apply, labelled)
             logger.info("Applied preprocessor {}.".format(p.__name__))
         
-        self.rand_vec = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
-        self.rand_label_vec = _random_1hot_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
+        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
+        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
         # Present images them in chunks of exactly batch-size:
-        self.real     = _image_stream_batch(train, args.hyperparam.batch_size)
+        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
+        self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
 
         # Use to label a discriminator batch as real
         self._label_dis_real = map(lambda a, b: a + b,

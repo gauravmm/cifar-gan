@@ -65,22 +65,36 @@ def main(args):
     #
 
     # Input/output tensors:
-    gen_input  = layers.Input(shape=args.hyperparam.SEED_DIM)
-    gen_label_input  = layers.Input(shape=args.hyperparam.NUM_CLASSES)
-    dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM)
+    gen_input  = layers.Input(shape=args.hyperparam.SEED_DIM, name="input_gen_seed")
+    gen_label_input  = layers.Input(shape=args.hyperparam.NUM_CLASSES, name="input_gen_class")
+    dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM, name='input_dis')
     
-    dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
+    dis_model            = args.discriminator.discriminator(dis_input, args.generator.IMAGE_DIM)
+    dis_model_labelled   = models.Model(inputs=dis_input, outputs=[dis_model(dis_input)], name='model_discriminator_labelled')
+    dis_model_unlabelled = models.Model(inputs=dis_input, outputs=[dis_model(dis_input)], name='model_discriminator_unlabelled')
+    
     gen_model = args.generator.generator(gen_input, gen_label_input, args.generator.IMAGE_DIM)
-    # We compose the discriminator onto the generator to produce the combined model:
-    com_model = models.Model(inputs=[gen_input, gen_label_input], outputs=[dis_model(gen_model(gen_input, gen_label_input))], name='model_combined')
-
     gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
-    dis_model.compile(optimizer=args.hyperparam.optimizer_dis, loss='binary_crossentropy', metrics=support.METRICS)
+    # We compose the discriminator onto the generator to produce the combined model:
+
+    _dis_model_compile = {
+            'optimizer': args.hyperparam.optimizer_dis, 
+            'loss': args.hyperparam.loss_func,
+            'loss_weights': args.hyperparam.loss_weights,
+            'metrics': support.METRICS
+        }
+    dis_model_labelled.compile(*_dis_model_compile)
+    dis_model_unlabelled.compile(*_dis_model_compile)
+    
+    com_model = models.Model(inputs=[gen_input, gen_label_input], outputs=[dis_model_unlabelled(gen_model(gen_input, gen_label_input))], name='model_combined')
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
-    dis_model.trainable = False
-    com_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy', metrics=support.METRICS)
+    dis_model_unlabelled.trainable = False
+    com_model.compile(optimizer=args.hyperparam.optimizer_gen,
+                      loss=args.hyperparam.loss_func,
+                      loss_weights=args.hyperparam.loss_weights,
+                      metrics=support.METRICS)
 
     logger.info("Compiled models.")
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
@@ -154,17 +168,42 @@ def main(args):
         while True:
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            loss_fake = dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
-                                                 next(data.label_dis_fake))
+            fake_class = next(data.rand_label_vec)
+            loss_fake = dis_model.train_on_batch(
+                gen_model.predict({
+                    'input_gen_seed' : next(data.rand_vec),
+                    'input_gen_class': fake_class
+                }), {
+                    'discriminator': next(data.label_dis_fake),
+                    'classifier'   : fake_class
+                })
             step_dis_loss_fake += loss_fake
+            
             # Use real images (but not labels), and train the model to predict them as real.
-            loss_real = dis_model.train_on_batch(next(data.real[0]),
-                                                 next(data.label_dis_real))
+            data_x, _ = next(data.unlabelled)
+            loss_real = dis_model_unlabelled.train_on_batch(
+                data_x, {
+                    'discriminator': next(data.label_dis_real),
+                    'classifier'   : fake_class
+                })
             step_dis_loss_real += loss_real
 
             step_dis += 1
             if args.hyperparam.discriminator_halt(batch, step_dis, metric_wrap(loss_fake), metric_wrap(loss_real)):
                 break
+        
+        # Train with labels
+        step_dis_label = 0
+        while args.hyperparam.discriminator_label(batch, step_dis_label):
+            data_x, data_y = next(data.labelled)
+            loss_label = dis_model_unlabelled.train_on_batch(
+                data_x, {
+                    'discriminator': next(data.label_dis_real),
+                    'classifier'   : data_y
+                })
+            step_dis_loss_real += loss_real
+            step_dis_label += 1
+
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
         # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
@@ -175,14 +214,19 @@ def main(args):
         step_com = 0
         step_com_loss = zero_loss()
         while True:
-            loss = com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
+            fake_class = next(data.rand_label_vec)
+            loss = com_model.train_on_batch({
+                    'input_gen_seed' : next(data.rand_vec),
+                    'input_gen_class': fake_class
+                }, {
+                    'discriminator': next(data.label_gen_real),
+                    'classifier'   : fake_class
+                })
             step_com_loss += loss
             
             step_com += 1
             if args.hyperparam.generator_halt(batch, step_com, metric_wrap(loss)):
                 break
-
-        logger.debug("In batch {}, dis was trained for {} steps, and gen for {}.".format(batch, step_dis, step_com))
 
         #
         # That is the entire training algorithm.
