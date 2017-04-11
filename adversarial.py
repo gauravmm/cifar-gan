@@ -68,12 +68,12 @@ def main(args):
     #
 
     gen_input  = layers.Input(shape=args.generator.SEED_DIM)
-    # dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
+    dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
     
     # Input/output tensors:
     # Define and compile models
     # We compose the discriminator onto the generator to produce the combined model:
-    gen_model = args.generator.generator(args.generator.SEED_DIM, args.generator.IMAGE_DIM)
+    gen_model = args.generator.generator(gen_input, args.generator.IMAGE_DIM)
     dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
     com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
 

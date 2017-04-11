@@ -6,6 +6,7 @@ from typing import Tuple
 
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Conv2DTranspose
+from keras.layers.merge import Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 
 
@@ -22,7 +23,7 @@ IMAGE_DIM = (32, 32, 3)
 #leaky relu coefficient
 alpha = 0.3
 
-def generator(input_size, output_size) -> Tuple[layers.convolutional._Conv, layers.convolutional._Conv]:
+def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, layers.convolutional._Conv]:
     # We only allow the discriminator model to work on CIFAR-sized data.
     assert output_size == (32, 32, 3)
     (img_height, img_width, img_channels) = output_size
@@ -30,26 +31,26 @@ def generator(input_size, output_size) -> Tuple[layers.convolutional._Conv, laye
     assert img_height % 4 == 0 and img_width % 4 == 0, \
         'Generator network must be able to transform `x` into a tensor of shape (img_height, img_width, img_channels).'
 
-    #
-    # input dimensions to the first conv layer in the generator
-    #
-    model = Sequential()
+    x = Concatenate()(Flatten()(inp), Flatten()(inp_label))
 
-    model.add(Dense(256, input_shape=input_size))
-    model.add(LeakyReLU(alpha))
-    model.add(layers.Reshape((4, 4, -1)))
+    layers = [
+        Dense(256)
+        LeakyReLU(alpha)
+        layers.Reshape((4, 4, -1)),
+        Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)),
+        LeakyReLU(alpha),
+        Conv2DTranspose(128, (3, 3), padding = 'same', strides=(2, 2)),
+        LeakyReLU(alpha),
+        Conv2DTranspose(64, (3, 3), padding = 'same', strides=(2, 2)),
+        LeakyReLU(alpha),
+        Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same')
+    ]
 
-    model.add(Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)))
-    model.add(LeakyReLU(alpha))
+    for l in layers:
+        x = l(x)
 
-    model.add(Conv2DTranspose(128, (3, 3), padding = 'same', strides=(2, 2)))
-    model.add(LeakyReLU(alpha))
-    
-    model.add(Conv2DTranspose(64, (3, 3), padding = 'same', strides=(2, 2)))
-    model.add(LeakyReLU(alpha))
+    model = Model(inputs=[inp, inp_label], outputs=x)
 
-    model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
-    
     return model
 
 
@@ -61,28 +62,34 @@ def generator(input_size, output_size) -> Tuple[layers.convolutional._Conv, laye
 # Each generator/discriminator needs a name if they are in different files
 # NAME="Simple"
 
-def discriminator(input_size):
+def discriminator(inp, num_classes):
     # We only allow the discriminator model to work on CIFAR-sized data.
-    assert input_size == (32, 32, 3)
-    (img_height, img_width, img_channels) = input_size
+    x = inp
 
-    model = Sequential()
-    
-    model.add(Dense(256, input_shape=input_size))
-    # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * features)
-    
-    model.add(Conv2D(128, (3, 3), padding='same', strides=(2, 2)))
-    model.add(LeakyReLU(alpha))
-    
-    model.add(Conv2D(256, (3, 3), padding='same', strides=(2, 2)))
-    model.add(LeakyReLU(alpha))
+    layers = [
+    	Dense(256),
+    	Conv2D(128, (3, 3), padding='same', strides=(2, 2)),
+    	LeakyReLU(alpha),
+       	Conv2D(256, (3, 3), padding='same', strides=(2, 2)),
+    	LeakyReLU(alpha),
+    	Conv2D(512, (3, 3), padding='same', strides=(2, 2)),
+    	LeakyReLU(alpha),
+    	Flatten()
+    ]
 
-    model.add(Conv2D(512, (3, 3), padding='same', strides=(2, 2)))
-    model.add(LeakyReLU(alpha))
+    for l in layers:
+        x = l(x)
 
-    model.add(Flatten())
-    model.add(Dense(16))
-    model.add(LeakyReLU(alpha))
-    model.add(Dense(1, activation='sigmoid'))
+    y1 = Dense(16)(x)
+    y1 = LeakyReLU(alpha)(y1)
+    y1 = Dense(1, activation='sigmoid')(y1)
 
-    return model
+    y2 = Dense(num_classes)(x)
+    y2 = LeakyReLU(alpha)(y2)
+    y2 = Dense(1, activation='sigmoid')(y2)
+
+    model_fake  = Model(inputs=[inp], outputs=[y1])
+    model_class = Model(inputs=[inp], outputs=[y2])
+
+    return (model_fake, model_class)
+
