@@ -60,22 +60,19 @@ def main(args):
     logger.info("Loaded hyperparameters: {}".format(args.hyperparam.__file__))
     logger.info("Loaded preprocessors  : {}".format(", ".join(a.__file__ for a in args.preprocessor)))
 
-    img_dim = args.generator.IMAGE_DIM
-
-
     #
     # Build Model
     #
 
-    gen_input  = layers.Input(shape=args.generator.SEED_DIM)
-    dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
-    
     # Input/output tensors:
-    # Define and compile models
-    # We compose the discriminator onto the generator to produce the combined model:
-    gen_model = args.generator.generator(gen_input, args.generator.IMAGE_DIM)
+    gen_input  = layers.Input(shape=args.hyperparam.SEED_DIM)
+    gen_label_input  = layers.Input(shape=args.hyperparam.NUM_CLASSES)
+    dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM)
+    
     dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
-    com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
+    gen_model = args.generator.generator(gen_input, gen_label_input, args.generator.IMAGE_DIM)
+    # We compose the discriminator onto the generator to produce the combined model:
+    com_model = models.Model(inputs=[gen_input, gen_label_input], outputs=[dis_model(gen_model(gen_input, gen_label_input))], name='model_combined')
 
     gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
     dis_model.compile(optimizer=args.hyperparam.optimizer_dis, loss='binary_crossentropy', metrics=support.METRICS)

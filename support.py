@@ -32,14 +32,15 @@ class Data(object):
 
         train = args.data.get_data("train", args.hyperparam.batch_size)
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
+        self.unapply  = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
         for p in args.preprocessor:
             train = itertools.starmap(p.apply, train)
             logger.info("Applied preprocessor {}.".format(p.__name__))
         
         self.rand_vec = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
+        self.rand_label_vec = _random_1hot_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
         # Present images them in chunks of exactly batch-size:
         self.real     = _image_stream_batch(train, args.hyperparam.batch_size)
-        self.unapply  = functools.reduce(lambda f, g: lambda x: f(g(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
 
         # Use to label a discriminator batch as real
         self._label_dis_real = map(lambda a, b: a + b,
@@ -93,6 +94,14 @@ def _image_stream_batch(itr, batch_size):
         yield (rx[:batch_size,...], ry[:batch_size,...])
         rx = rx[batch_size:,...]
         ry = ry[batch_size:,...]
+
+def _random_1hot_stream(batch_size : int, num_class):
+    sz = [batch_size] + list(img_size)
+    while True:
+        z = np.zeros(size=sz)
+        z[:,np.random.randint(num_class, size=(batch_size,))] = 1
+        print(z)
+        yield z
 
 # Produces a stream of random data
 def _random_stream(batch_size : int, img_size):

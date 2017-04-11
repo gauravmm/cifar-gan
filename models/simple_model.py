@@ -16,10 +16,6 @@ from keras.layers.advanced_activations import LeakyReLU
 
 # Name of generator
 NAME="Simple"
-# Size of random seed used by the generator's input tensor:
-SEED_DIM = (32,)
-# Size of the output. The generator, discriminator and dataset will be required to use this size.
-IMAGE_DIM = (32, 32, 3)
 #leaky relu coefficient
 alpha = 0.3
 
@@ -34,8 +30,8 @@ def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, 
     x = Concatenate()(Flatten()(inp), Flatten()(inp_label))
 
     layers = [
-        Dense(256)
-        LeakyReLU(alpha)
+        Dense(256),
+        LeakyReLU(alpha),
         layers.Reshape((4, 4, -1)),
         Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)),
         LeakyReLU(alpha),
@@ -49,7 +45,7 @@ def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, 
     for l in layers:
         x = l(x)
 
-    model = Model(inputs=[inp, inp_label], outputs=x)
+    model = Model(inputs=[inp, inp_label], outputs=x, name="model_generator")
 
     return model
 
@@ -63,7 +59,6 @@ def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, 
 # NAME="Simple"
 
 def discriminator(inp, num_classes):
-    # We only allow the discriminator model to work on CIFAR-sized data.
     x = inp
 
     layers = [
@@ -80,16 +75,12 @@ def discriminator(inp, num_classes):
     for l in layers:
         x = l(x)
 
+    # The name parameters here are crucial!
     y1 = Dense(16)(x)
     y1 = LeakyReLU(alpha)(y1)
-    y1 = Dense(1, activation='sigmoid')(y1)
+    y1 = Dense(1, activation='sigmoid', name='discriminator')(y1)
 
-    y2 = Dense(num_classes)(x)
-    y2 = LeakyReLU(alpha)(y2)
-    y2 = Dense(1, activation='sigmoid')(y2)
+    y2 = Dense(num_classes, activation='sigmoid', name='classifier')(x)
 
-    model_fake  = Model(inputs=[inp], outputs=[y1])
-    model_class = Model(inputs=[inp], outputs=[y2])
-
-    return (model_fake, model_class)
+    return Model(inputs=[inp], outputs=[y1, y2], name="model_discriminator")
 
