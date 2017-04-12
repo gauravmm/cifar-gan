@@ -45,9 +45,7 @@ def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, 
     for l in layers:
         x = l(x)
 
-    model = Model(inputs=[inp, inp_label], outputs=x, name="model_generator")
-
-    return model
+    return [x]
 
 
 #
@@ -84,4 +82,4 @@ def discriminator(inp, num_classes):
 
     y2 = Dense(num_classes, activation='sigmoid', name='classifier')(x)
 
-    return Model(inputs=[inp], outputs=[y1, y2], name="model_discriminator")
+    return [y1, y2]

@@ -69,12 +69,13 @@ def main(args):
     gen_label_input  = layers.Input(shape=(args.hyperparam.NUM_CLASSES,), name="input_gen_class")
     dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM, name='input_dis')
     
-    dis_model            = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
-    dis_model_labelled   = models.Model(inputs=dis_input, outputs=dis_model(dis_input), name='model_discriminator_labelled')
-    dis_model_unlabelled = models.Model(inputs=dis_input, outputs=dis_model(dis_input), name='model_discriminator_unlabelled')
+    dis_output           = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
+    dis_model_labelled   = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_labelled')
+    dis_model_unlabelled = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_unlabelled')
     
-    gen_model = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
-    gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
+    gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
+    gen_model = models.Model(inputs=[gen_input, gen_label_input], outputs=gen_output)
+    gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy', name="model_generator")
     # We compose the discriminator onto the generator to produce the combined model:
 
     _dis_model_compile = {
@@ -99,9 +100,9 @@ def main(args):
 
     logger.info("Compiled models.")
     
-    plot_model(com_model, to_file='com_model.png')
-    logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
-    logger.debug("Discriminative model structure:\n{}".format(ascii(dis_model)))
+    for v, f in [(com_model, "com_model.png"), (dis_model_labelled, "dis_model_labelled.png"), (dis_model_unlabelled, "dis_model_unlabelled.png"), (gen_model, "gen_model.png")]:
+        plot_model(v, show_shapes=True, to_file=os.path.join(config.PATH['logs'], f))
+    logger.debug("Model structures written to {}".format(config.PATH['logs']))
 
 
     #
