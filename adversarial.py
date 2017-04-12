@@ -16,13 +16,13 @@ import sys
 import time
 
 import numpy as np
-
-import config
 import png
-import support
 import tensorflow as tf
 from keras import layers, models
-from keras_diagram import ascii
+from keras.utils import plot_model
+
+import config
+import support
 
 #
 # Init
@@ -98,6 +98,8 @@ def main(args):
                       metrics=support.METRICS)
 
     logger.info("Compiled models.")
+    
+    plot_model(com_model, to_file='com_model.png')
     logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
     logger.debug("Discriminative model structure:\n{}".format(ascii(dis_model)))
 
@@ -146,7 +148,7 @@ def main(args):
 
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
-    intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
+    intv_dis_loss_real = np.zeros(shape=len(com_model.metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
     intv_com_count = 0
     intv_dis_count = 0

@@ -10,6 +10,8 @@ IMAGE_DIM = (32, 32, 3)
 # Number of classes. The generator, discriminator and dataset will be required to use this size.
 NUM_CLASSES = 10
 
+# Semi-supervised
+labelled_fraction = 0.10
 
 # As described in appendix A of DeepMind's AC-GAN paper
 optimizer_gen = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)

@@ -38,8 +38,8 @@ class Data(object):
             labelled   = itertools.starmap(p.apply, labelled)
             logger.info("Applied preprocessor {}.".format(p.__name__))
         
-        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
-        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
+        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
+        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
         # Present images them in chunks of exactly batch-size:
         self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
         self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
@@ -98,11 +98,10 @@ def _image_stream_batch(itr, batch_size):
         ry = ry[batch_size:,...]
 
 def _random_1hot_stream(batch_size : int, num_class):
-    sz = [batch_size] + list(img_size)
     while True:
-        z = np.zeros(size=sz)
-        z[:,np.random.randint(num_class, size=(batch_size,))] = 1
-        print(z)
+        z = np.zeros((batch_size, num_class))
+        q = np.random.randint(num_class, size=(batch_size,))
+        z[:,q] = 1
         yield z
 
 # Produces a stream of random data
