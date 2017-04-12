@@ -72,3 +72,4 @@ class StepHalt(object):
 _halting = StepHalt()
 discriminator_halt = lambda b, s, l1, l2: s >= 1 # _halting.discriminator_halt
 generator_halt     = lambda b, s, l: s >= 4 # _halting.generator_halt
+classifier_halt    = lambda b, s: s >= 1

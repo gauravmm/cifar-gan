@@ -66,34 +66,35 @@ def main(args):
 
     # Input/output tensors:
     gen_input  = layers.Input(shape=args.hyperparam.SEED_DIM, name="input_gen_seed")
-    gen_label_input  = layers.Input(shape=args.hyperparam.NUM_CLASSES, name="input_gen_class")
+    gen_label_input  = layers.Input(shape=(args.hyperparam.NUM_CLASSES,), name="input_gen_class")
     dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM, name='input_dis')
     
-    dis_model            = args.discriminator.discriminator(dis_input, args.generator.IMAGE_DIM)
-    dis_model_labelled   = models.Model(inputs=dis_input, outputs=[dis_model(dis_input)], name='model_discriminator_labelled')
-    dis_model_unlabelled = models.Model(inputs=dis_input, outputs=[dis_model(dis_input)], name='model_discriminator_unlabelled')
+    dis_model            = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
+    dis_model_labelled   = models.Model(inputs=dis_input, outputs=dis_model(dis_input), name='model_discriminator_labelled')
+    dis_model_unlabelled = models.Model(inputs=dis_input, outputs=dis_model(dis_input), name='model_discriminator_unlabelled')
     
-    gen_model = args.generator.generator(gen_input, gen_label_input, args.generator.IMAGE_DIM)
+    gen_model = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
     gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
     # We compose the discriminator onto the generator to produce the combined model:
 
     _dis_model_compile = {
-            'optimizer': args.hyperparam.optimizer_dis, 
-            'loss': args.hyperparam.loss_func,
-            'loss_weights': args.hyperparam.loss_weights,
+            'optimizer': args.hyperparam.optimizer_dis,
+            'loss': [args.hyperparam.loss_func['discriminator'], args.hyperparam.loss_func['classifier']],
             'metrics': support.METRICS
         }
-    dis_model_labelled.compile(*_dis_model_compile)
-    dis_model_unlabelled.compile(*_dis_model_compile)
+    dis_model_labelled.compile(
+        loss_weights=[args.hyperparam.loss_weights['discriminator'], args.hyperparam.loss_weights['classifier']],
+        **_dis_model_compile)
+    dis_model_unlabelled.compile(loss_weights=[1, 0], **_dis_model_compile)
     
-    com_model = models.Model(inputs=[gen_input, gen_label_input], outputs=[dis_model_unlabelled(gen_model(gen_input, gen_label_input))], name='model_combined')
+    com_model = models.Model(inputs=[gen_input, gen_label_input], outputs=dis_model_unlabelled(gen_model([gen_input, gen_label_input])), name='model_combined')
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
     dis_model_unlabelled.trainable = False
     com_model.compile(optimizer=args.hyperparam.optimizer_gen,
-                      loss=args.hyperparam.loss_func,
-                      loss_weights=args.hyperparam.loss_weights,
+                      loss=[args.hyperparam.loss_func['discriminator'], args.hyperparam.loss_func['classifier']],
+                      loss_weights=[1, 0],
                       metrics=support.METRICS)
 
     logger.info("Compiled models.")
@@ -194,7 +195,7 @@ def main(args):
         
         # Train with labels
         step_dis_label = 0
-        while args.hyperparam.discriminator_label(batch, step_dis_label):
+        while not args.hyperparam.classifier_halt(batch, step_dis_label):
             data_x, data_y = next(data.labelled)
             loss_label = dis_model_unlabelled.train_on_batch(
                 data_x, {
