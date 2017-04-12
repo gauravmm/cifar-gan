@@ -172,7 +172,7 @@ def main(args):
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
             fake_class = next(data.rand_label_vec)
-            loss_fake = dis_model.train_on_batch(
+            loss_fake = dis_model_unlabelled.train_on_batch(
                 gen_model.predict({
                     'input_gen_seed' : next(data.rand_vec),
                     'input_gen_class': fake_class
