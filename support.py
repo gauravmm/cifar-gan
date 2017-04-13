@@ -78,10 +78,22 @@ def label_fake(y_true, y_pred):
 
 METRICS = [label_real, label_fake]
 
+def get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model):
+    # Keras overwrites the names of metrics, so here we check that their order is as expected before creating a custom
+    # name array.
+    logger.debug("Metrics for gen_model: {}".format(gen_model.metrics_names))
+    assert gen_model.metrics_names == ['loss']
+    logger.debug("Metrics for dis_model_labelled: {}".format(dis_model_labelled.metrics_names))
+    assert dis_model_labelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss','discriminator_label_real', 'discriminator_label_fake', 'classifier_label_real', 'classifier_label_fake']
+    logger.debug("Metrics for dis_model_unlabelled: {}".format(dis_model_unlabelled.metrics_names))
+    assert dis_model_unlabelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'classifier_label_real', 'classifier_label_fake']
+    logger.debug("Metrics for com_model: {}".format(com_model.metrics_names))
+    assert com_model.metrics_names == ['loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake']
+    
+    # Custom name array.
+    return ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'classifier_label_real', 'classifier_label_fake']
+
 # TODO: Support reading test data.
-# TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
-#       better generalization.
-# TODO: Support randomization of input
 
 # A generator that enforces the batch-size of the input. Used to feed keras the right amount of data even with data 
 # augmentation increasing the batch size.
