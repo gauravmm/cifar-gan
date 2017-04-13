@@ -74,8 +74,8 @@ def main(args):
     dis_model_unlabelled = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_unlabelled')
     
     gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
-    gen_model = models.Model(inputs=[gen_input, gen_label_input], outputs=gen_output)
-    gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy', name="model_generator")
+    gen_model = models.Model(inputs=[gen_input, gen_label_input], outputs=gen_output, name="model_generator")
+    gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
     # We compose the discriminator onto the generator to produce the combined model:
 
     _dis_model_compile = {
@@ -176,14 +176,14 @@ def main(args):
             fake_class = next(data.rand_label_vec)
             loss_fake = dis_model_unlabelled.train_on_batch(
                 gen_model.predict([next(data.rand_vec), fake_class]),
-                [ next(data.label_dis_fake), fake_class ])
+                [next(data.label_dis_fake), fake_class])
             step_dis_loss_fake += loss_fake
             
             # Use real images (but not labels), and train the model to predict them as real.
             data_x, _ = next(data.unlabelled)
             loss_real = dis_model_unlabelled.train_on_batch(
                 data_x, 
-                [ next(data.label_dis_real), fake_class ])
+                [next(data.label_dis_real), fake_class])
             step_dis_loss_real += loss_real
 
             step_dis += 1
