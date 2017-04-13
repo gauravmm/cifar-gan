@@ -104,6 +104,18 @@ def main(args):
         plot_model(v, show_shapes=True, to_file=os.path.join(config.PATH['logs'], f))
     logger.debug("Model structures written to {}".format(config.PATH['logs']))
 
+    # Keras overwrites the names of metrics, so here we check that their order is as expected before creating a custom
+    # name array.
+    logger.debug("Metrics for gen_model: {}".format(gen_model.metrics_names))
+    assert gen_model.metrics_names == ['loss']
+    logger.debug("Metrics for dis_model_labelled: {}".format(dis_model_labelled.metrics_names))
+    assert dis_model_labelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss','discriminator_label_real', 'discriminator_label_fake', 'classifier_label_real', 'classifier_label_fake']
+    logger.debug("Metrics for dis_model_unlabelled: {}".format(dis_model_unlabelled.metrics_names))
+    assert dis_model_unlabelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'classifier_label_real', 'classifier_label_fake']
+    logger.debug("Metrics for com_model: {}".format(com_model.metrics_names))
+    assert com_model.metrics_names == ['loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake']
+    # Custom name array.
+    metrics_names = ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'classifier_label_real', 'classifier_label_fake']
 
     #
     # Load weights
@@ -125,7 +137,7 @@ def main(args):
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
                                             for a in ["composite", "discriminator+real", "discriminator+fake"]
-                                            for b in com_model.metrics_names) +
+                                            for b in metrics_names) +
                   ", discriminator_steps, generator_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
@@ -145,19 +157,19 @@ def main(args):
     # Training
     #
 
-    logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(com_model.metrics_names), args.log_interval))
+    logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(metrics_names), args.log_interval))
 
     # Loss value in the current log interval:
-    intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
-    intv_dis_loss_real = np.zeros(shape=len(com_model.metrics_names))
+    intv_com_loss = np.zeros(shape=len(metrics_names))
+    intv_dis_loss_real = np.zeros(shape=len(metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
     intv_com_count = 0
     intv_dis_count = 0
 
     # Format the score printing
-    zero_loss = lambda: np.asarray([0. for _ in com_model.metrics_names], dtype=np.float16)
-    print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
-    metric_wrap = lambda x: {k:v for k, v in zip(com_model.metrics_names, x)}
+    zero_loss = lambda: np.asarray([0. for _ in metrics_names], dtype=np.float16)
+    print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(metrics_names, scores))
+    metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     for batch in range(batch, args.batches):
         logger.debug('Step {} of {}.'.format(batch, args.batches))
 
@@ -174,22 +186,15 @@ def main(args):
             # fake images separately from real images.
             fake_class = next(data.rand_label_vec)
             loss_fake = dis_model_unlabelled.train_on_batch(
-                gen_model.predict({
-                    'input_gen_seed' : next(data.rand_vec),
-                    'input_gen_class': fake_class
-                }), {
-                    'discriminator': next(data.label_dis_fake),
-                    'classifier'   : fake_class
-                })
+                gen_model.predict([next(data.rand_vec), fake_class]),
+                [ next(data.label_dis_fake), fake_class ])
             step_dis_loss_fake += loss_fake
             
             # Use real images (but not labels), and train the model to predict them as real.
             data_x, _ = next(data.unlabelled)
             loss_real = dis_model_unlabelled.train_on_batch(
-                data_x, {
-                    'discriminator': next(data.label_dis_real),
-                    'classifier'   : fake_class
-                })
+                data_x, 
+                [ next(data.label_dis_real), fake_class ])
             step_dis_loss_real += loss_real
 
             step_dis += 1
@@ -200,11 +205,9 @@ def main(args):
         step_dis_label = 0
         while not args.hyperparam.classifier_halt(batch, step_dis_label):
             data_x, data_y = next(data.labelled)
-            loss_label = dis_model_unlabelled.train_on_batch(
-                data_x, {
-                    'discriminator': next(data.label_dis_real),
-                    'classifier'   : data_y
-                })
+            loss_label = dis_model_labelled.train_on_batch(
+                data_x,
+                [ next(data.label_dis_real), data_y ])
             step_dis_loss_real += loss_real
             step_dis_label += 1
 
@@ -219,13 +222,9 @@ def main(args):
         step_com_loss = zero_loss()
         while True:
             fake_class = next(data.rand_label_vec)
-            loss = com_model.train_on_batch({
-                    'input_gen_seed' : next(data.rand_vec),
-                    'input_gen_class': fake_class
-                }, {
-                    'discriminator': next(data.label_gen_real),
-                    'classifier'   : fake_class
-                })
+            loss = com_model.train_on_batch(
+                [ next(data.rand_vec), fake_class ],
+                [ next(data.label_gen_real), fake_class ])
             step_com_loss += loss
             
             step_com += 1
