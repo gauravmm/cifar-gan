@@ -1,13 +1,13 @@
 """
 A simple model, containing both generator and discriminator.
 """
-from keras import layers, models
 from typing import Tuple
 
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Conv2DTranspose
+from keras import layers, models
+from keras.layers import (Activation, Conv2D, Conv2DTranspose, Dense, Dropout,
+                          Flatten, Reshape)
 from keras.layers.advanced_activations import LeakyReLU
-
+from keras.models import Sequential
 
 #
 # GENERATOR
@@ -25,35 +25,29 @@ alpha = 0.3
 def generator(input_size, output_size) -> layers.convolutional._Conv:
     # We only allow the discriminator model to work on CIFAR-sized data.
     assert output_size == (32, 32, 3)
-    (img_height, img_width, img_channels) = output_size
-
-    dim = 4
-    assert img_height % dim == 0 and img_width % dim == 0, \
-        'Generator network must be able to transform `x` into a tensor of shape (img_height, img_width, img_channels).'
-
-    #
-    # input dimensions to the first conv layer in the generator
-    #
-    model = Sequential()
-
-    model.add(Dense(dim * dim * 16, input_shape=input_size))
-    model.add(LeakyReLU(alpha))
-    model.add(layers.Reshape((dim, dim, -1)))
-
-    features = 512
-    while dim != img_height:
-        dim *= 2
-        features //= 2
-        
-        model.add(Conv2DTranspose(features, (3, 3),
-                                  padding = 'same', strides=(2, 2)))
-        model.add(LeakyReLU(alpha))
-        model.add(Dropout(0.5))
-
-    # number of feature maps => number of image channels
-    model.add(Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same'))
     
-    return model
+    x = layers.Input(shape=input_size, name="input_gen_seed")
+    y = x
+    lys = [
+        Dense(256),
+        LeakyReLU(alpha),
+        Reshape((4, 4, -1)),
+        Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)),
+        LeakyReLU(alpha),
+        Dropout(0.5),
+        Conv2DTranspose(128, (3, 3), padding = 'same', strides=(2, 2)),
+        LeakyReLU(alpha),
+        Dropout(0.5),
+        Conv2DTranspose(64, (3, 3), padding = 'same', strides=(2, 2)),
+        LeakyReLU(alpha),
+        Dropout(0.5),
+        Conv2DTranspose(3, (1, 1), activation='tanh', padding='same')
+    ]
+
+    for l in lys:
+        y = l(y)
+
+    return models.Model(inputs=x, outputs=y, name="model_generator")
 
 
 #
@@ -69,21 +63,23 @@ def discriminator(input_size):
     assert input_size == (32, 32, 3)
     (img_height, img_width, img_channels) = input_size
 
-    model = Sequential()
+    x = layers.Input(shape=input_size, name='input_dis')
+    y = x
+    lys = [
+    	Dense(256),
+    	Conv2D(128, (3, 3), padding='same', strides=(2, 2)),
+    	LeakyReLU(alpha),
+       	Conv2D(256, (3, 3), padding='same', strides=(2, 2)),
+    	LeakyReLU(alpha),
+    	Conv2D(512, (3, 3), padding='same', strides=(2, 2)),
+    	LeakyReLU(alpha),
+    	Flatten(),
+        Dense(16),
+        LeakyReLU(alpha),
+        Dense(1, activation='sigmoid', name='discriminator')
+    ]
+
+    for l in lys:
+        y = l(y)
     
-    dim = 4
-    model.add(Dense(dim * dim * 16, input_shape=input_size))
-    # down sample with strided convolutions until we reach the desired spatial dimension (4 * 4 * features)
-    features = 64
-    while img_height > dim:
-        dim *= 2
-        features *= 2
-        model.add(Conv2D(features, (3, 3), padding='same', strides=(2, 2)))
-        model.add(LeakyReLU(alpha))
-
-    model.add(Flatten())
-    model.add(Dense(16))
-    model.add(LeakyReLU(alpha))
-    model.add(Dense(1, activation='sigmoid'))
-
-    return model
+    return models.Model(inputs=x, outputs=y, name="model_discriminator")
