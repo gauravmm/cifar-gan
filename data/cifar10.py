@@ -9,12 +9,12 @@ def gen(d, batch_size):
     NUM_CLASS = 10
 
     # Randomize the order
-    p = np.random.permutation(train[0].shape[0])
+    p = np.random.permutation(x.shape[0])
     x = x[p,...]
     y = y[p,...]
     
     def _to_1hot(lbl):
-        z = np.zeros(size=(batch_size, NUM_CLASS))
+        z = np.zeros(shape=(batch_size, NUM_CLASS))
         z[:,lbl] = 1
         return z
 

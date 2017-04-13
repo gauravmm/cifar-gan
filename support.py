@@ -87,15 +87,23 @@ METRICS = [label_real, label_fake]
 # augmentation increasing the batch size.
 def _image_stream_batch(itr, batch_size):
     rx, ry = next(itr)
-    while True:
-        assert rx.shape[0] == ry.shape[0]
-        while rx.shape[0] < batch_size:
-            ax, ay = next(itr)
-            rx = np.concatenate((rx, ax))
-            ry = np.concatenate((ry, ay))
-        yield (rx[:batch_size,...], ry[:batch_size,...])
-        rx = rx[batch_size:,...]
-        ry = ry[batch_size:,...]
+    if ry is None:
+        while True:
+            while rx.shape[0] < batch_size:
+                ax, ay = next(itr)
+                rx = np.concatenate((rx, ax))
+            yield (rx[:batch_size,...], None)
+            rx = rx[batch_size:,...]
+    else:
+        while True:
+            assert rx.shape[0] == ry.shape[0]
+            while rx.shape[0] < batch_size:
+                ax, ay = next(itr)
+                rx = np.concatenate((rx, ax))
+                ry = np.concatenate((ry, ay))
+            yield (rx[:batch_size,...], ry[:batch_size,...])
+            rx = rx[batch_size:,...]
+            ry = ry[batch_size:,...]
 
 def _random_1hot_stream(batch_size : int, num_class):
     while True:
