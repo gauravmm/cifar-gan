@@ -112,7 +112,7 @@ def main(args):
 
     if args.resume:
         logger.info("Attempting to resume from saved checkpoints.")
-        batch = support.resume(args, gen_model, dis_model)
+        batch = support.resume(args, gen_model, dis_model_labelled)
         if batch:
             logger.info("Successfully resumed from batch {}".format(batch))
         else:
@@ -267,13 +267,13 @@ def main(args):
 
             # Write image
             img_fn = config.get_filename('image', args, batch)
-            img_data = data.unapply(gen_model.predict(next(data.rand_vec)))
+            img_data = data.unapply(gen_model.predict([next(data.rand_vec), next(data.rand_label_vec)]))
             png.from_array(support.arrange_images(img_data, args), 'RGB').save(img_fn)
             logger.debug("Saved sample images to {}.".format(img_fn))
 
             # Save weights
             gen_model.save_weights(config.get_filename('weight', args, 'gen', batch))
-            dis_model.save_weights(config.get_filename('weight', args, 'dis', batch))
+            dis_model_labelled.save_weights(config.get_filename('weight', args, 'dis', batch))
             logger.debug("Saved weights for batch {}.".format(batch))
 
 

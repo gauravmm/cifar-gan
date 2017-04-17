@@ -26,7 +26,7 @@ def gen(d, batch_size):
         j = i + batch_size
         # If we wrap around the back of the dataset:
         if j >= x.shape[0]:
-            rv = list(range(i, dataset.shape[0])) + list(range(0, j - dataset.shape[0]))
+            rv = list(range(i, x.shape[0])) + list(range(0, j - x.shape[0]))
             yield (x[rv,...], _to_1hot(y[rv,...]))
             i = j - x.shape[0]
         else:
