@@ -26,7 +26,7 @@ logger = logging.getLogger()
 Y_REAL = 0
 Y_FAKE = 1
 
-class Data(object):
+class TrainData(object):
     def __init__(self, args):
         logger.info("Training data loaded from disk.")
 
@@ -59,6 +59,10 @@ class Data(object):
                                                 self._label_dis_real, self._label_dis_fake)
         # Use to label a generator batch as real
         self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+
+class TrainData(object):
+    pass
+
 
 #
 # Accuracy metric
