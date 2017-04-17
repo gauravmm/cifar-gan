@@ -110,16 +110,25 @@ def main(args):
     # Load weights
     #
 
-    if args.resume:
+    if args.split == "test":
+        logger.info("Attempting to load last checkpoint for testing.")
+        batch = support.resume(args, gen_model, dis_model_labelled)
+        if batch:
+            logger.info("Successfully loaded batch {}".format(batch))
+        else:
+            logger.warn("Could not load latest checkpoint for testing. Exiting...")
+            return
+    elif args.resume:
         logger.info("Attempting to resume from saved checkpoints.")
         batch = support.resume(args, gen_model, dis_model_labelled)
         if batch:
             logger.info("Successfully resumed from batch {}".format(batch))
         else:
-            logger.warn("Could not resume training.".format(batch))
+            logger.warn("Could not resume training.")
 
     # Clear the files
     if batch is None:
+        assert args.split == "train"
         batch = support.clear(args)
         
         # Write CSV file headers
@@ -133,18 +142,42 @@ def main(args):
 
 
     assert batch is not None
-    
+
 
     #
     # Load data
     #
     
-    # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
+    # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We instead use
+    # our own.
     data = support.Data(args)
 
-    #
-    # Training
-    #
+    if args.split == "train":
+        try:
+            train(args, data, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt while training on batch {}.".format(batch))
+    elif args.split == "test":
+        try:
+            pass
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt while training on batch {}.".format(batch))
+    else:
+        assert not "This state should not be reachable; the argparser should catch this case."
+
+def save_sample_images(args, batch, gen_model):
+    img_fn = config.get_filename('image', args, batch)
+    img_data = data.unapply(gen_model.predict([next(data.rand_vec), next(data.rand_label_vec)]))
+    png.from_array(support.arrange_images(img_data, args), 'RGB').save(img_fn)
+    logger.debug("Saved sample images to {}.".format(img_fn))
+
+
+#
+# Training
+#
+def train(args, data, models):
+    dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
+    global batch
 
     logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(metrics_names), args.log_interval))
 
@@ -239,7 +272,6 @@ def main(args):
         intv_dis_count += step_dis
         intv_dis_loss_fake += step_dis_loss_fake
         intv_dis_loss_real += step_dis_loss_real
-        
         intv_com_loss += step_com_loss
         intv_com_count += step_com
         
@@ -266,11 +298,8 @@ def main(args):
             intv_dis_count = 0
 
             # Write image
-            img_fn = config.get_filename('image', args, batch)
-            img_data = data.unapply(gen_model.predict([next(data.rand_vec), next(data.rand_label_vec)]))
-            png.from_array(support.arrange_images(img_data, args), 'RGB').save(img_fn)
-            logger.debug("Saved sample images to {}.".format(img_fn))
-
+            save_sample_images(args, batch, gen_model)
+            
             # Save weights
             gen_model.save_weights(config.get_filename('weight', args, 'gen', batch))
             dis_model_labelled.save_weights(config.get_filename('weight', args, 'dis', batch))
@@ -281,8 +310,6 @@ if __name__ == '__main__':
     logger.info("Started")
     try:
         main(support.argparser().parse_args())
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt while processing batch {}".format(batch))
     except:
         raise
     finally:
