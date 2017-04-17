@@ -11,6 +11,7 @@ from keras.layers.core import Lambda
 from keras.models import Sequential
 from keras.layers.normalization import BatchNormalization
 from keras import backend as K
+import tensorflow as tf
 
 #
 # GENERATOR
@@ -40,21 +41,25 @@ def generator(input_size, output_size) -> layers.convolutional._Conv:
     y = x
     lys = [
         Dense(256),
-        Lambda(normalization),
-        LeakyReLU(alpha),
+        #Lambda(normalization),
+        #BatchNormalization(),
+        LeakyReLU(0),
         Reshape((4, 4, -1)),
         Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)),
-        Lambda(normalization),
-        LeakyReLU(alpha),
-		Dropout(0.5),
+        #Lambda(normalization),
+        #BatchNormalization(),
+        LeakyReLU(0),
+        #Dropout(0.5),
         Conv2DTranspose(128, (3, 3), padding = 'same', strides=(2, 2)),
-        Lambda(normalization),
-        LeakyReLU(alpha),
-		Dropout(0.5),
+        #Lambda(normalization),
+        #BatchNormalization(),
+        LeakyReLU(0),
+        #Dropout(0.5),
         Conv2DTranspose(64, (3, 3), padding = 'same', strides=(2, 2)),
-        Lambda(normalization),
-        LeakyReLU(alpha),
-		Dropout(0.5),
+        #Lambda(normalization),
+        #BatchNormalization(),
+        LeakyReLU(0),
+        #Dropout(0.5),
         Conv2DTranspose(3, (1, 1), activation='tanh', padding='same')
     ]
 
@@ -81,18 +86,27 @@ def discriminator(input_size):
     y = x
     lys = [
     	Dense(256),
+        #Dropout(0.3),
     	Conv2D(128, (3, 3), padding='same', strides=(2, 2)),
-        Lambda(normalization),
+        #Dropout(0.5),
+        #Lambda(normalization),
+        #BatchNormalization(),
     	LeakyReLU(alpha),
        	Conv2D(256, (3, 3), padding='same', strides=(2, 2)),
-        Lambda(normalization),
+        #Dropout(0.5),
+        #Lambda(normalization),
+        #BatchNormalization(),
     	LeakyReLU(alpha),
     	Conv2D(512, (3, 3), padding='same', strides=(2, 2)),
-        Lambda(normalization),
+        #Dropout(0.5),
+        #Lambda(normalization),
+        #BatchNormalization(),
     	LeakyReLU(alpha),
     	Flatten(),
         Dense(16),
-        Lambda(normalization),
+        #Dropout(0.3),
+        #Lambda(normalization),
+        #BatchNormalization(),
         LeakyReLU(alpha),
         Dense(1, activation='sigmoid', name='discriminator')
     ]
