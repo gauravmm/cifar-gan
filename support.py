@@ -28,15 +28,15 @@ Y_FAKE = 1
 
 class TrainData(object):
     def __init__(self, args):
+        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
         logger.info("Training data loaded from disk.")
 
-        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
         for p in args.preprocessor:
-            unlabelled = itertools.starmap(p.apply, unlabelled)
-            labelled   = itertools.starmap(p.apply, labelled)
-            logger.info("Applied preprocessor {}.".format(p.__name__))
+            unlabelled = itertools.starmap(p.apply_train, unlabelled)
+            labelled   = itertools.starmap(p.apply_train, labelled)
+            logger.info("Applied test preprocessor {}.".format(p.__name__))
         
         self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
         self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
@@ -60,9 +60,20 @@ class TrainData(object):
         # Use to label a generator batch as real
         self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
-class TrainData(object):
-    pass
+class TestData(object):
+    def __init__(self, args, split):
+        assert split == "test" or split == "develop"
+        
+        num, labelled = args.data.get_data(split, args.hyperparam.batch_size)
+        logger.info("Training data loaded from disk.")
 
+        for p in args.preprocessor:
+            labelled   = itertools.starmap(p.apply_test, labelled)
+            logger.info("Applied test preprocessor {}.".format(p.__name__))
+
+        self.labelled = labelled
+        self.num_labelled = num
+        self.label_dis_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
 #
 # Accuracy metric

@@ -145,12 +145,12 @@ def main(args):
 
     if args.split == "train":
         try:
-            train(args, data, metrics_names, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
+            train(args, metrics_names, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt while training on batch {}.".format(batch))
     elif args.split == "test":
         try:
-            train(args, data, metrics_names, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
+            test(args, metrics_names, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt while testing.")
     else:
@@ -167,18 +167,29 @@ def save_sample_images(args, data, batch, gen_model):
 # Training
 #
 
-def test(args, data, metrics_names, models):
+def test(args, metrics_names, models):
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
 
+    metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     data = support.TestData(args, "test")
 
-    logger.info("Starting tests.".format(", ".join(metrics_names), args.log_interval))
+    logger.info("Starting tests.")
+    metrics = np.zeros(shape=len(metrics_names))
+    i = 0
+    for batch, d in enumerate(data.labelled):
+        data_x, data_y = d
+        m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
+        metrics += m
+        i += 1
 
-    while True:
-        pass
+    metrics /= i
+    m = metric_wrap(metrics)
+    logger.debug(m)
+    logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
+    logger.info("Discriminator Accuracy: {:.1f}%".format(m['discriminator_label_real']*100))
 
 
-def train(args, data, metrics_names, models):
+def train(args, metrics_names, models):
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
     global batch
 

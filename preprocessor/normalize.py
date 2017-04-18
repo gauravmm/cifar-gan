@@ -12,6 +12,9 @@ def apply(inp, label):
 
     return (inp.astype(np.float32)/127.5 - 0.5, label)
 
+apply_test = apply
+apply_train = apply
+
 # Reverse 
 def unapply(inp):
     """

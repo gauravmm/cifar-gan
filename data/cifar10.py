@@ -15,7 +15,7 @@ def gen(d, batch_size, wrap=True):
     
     def _to_1hot(lbl):
         z = np.zeros(shape=(batch_size, NUM_CLASS))
-        z[:,lbl] = 1
+        z[np.arange(batch_size), lbl.flatten()] = 1
         return z
 
     assert x.shape[0] == y.shape[0]
@@ -36,7 +36,7 @@ def gen(d, batch_size, wrap=True):
     else:
         i = 0
         j = 0
-        while j < x.shape[0]:
+        while j < (x.shape[0] // batch_size) * batch_size:
             j = i + batch_size
             yield (x[i:j,...], _to_1hot(y[i:j,...]))
             i = j
@@ -49,7 +49,7 @@ def get_data(split, batch_size, labelled_fraction=1.0):
     Args:
         split      (str): "train", "develop", or "test"; to indicate the appropriate split. "train" provides an infinite
                           generator that constantly loops over the input data; the other two end after all data is
-                          consumed.
+                          consumed. Note: "develop" is not implemented.
         batch_size (int): The number of images to provide in each batch. Finite generators will discard partial batches.
         labelled_fraction (float): The fraction of "train" data to provide with labels.
 
