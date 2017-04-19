@@ -3,6 +3,16 @@
 import numpy as np
 from keras import optimizers
 
+# Size of random seed used by the generator's input tensor:
+SEED_DIM = (32,)
+# Size of the output. The generator, discriminator and dataset will be required to use this size.
+IMAGE_DIM = (32, 32, 3)
+# Number of classes. The generator, discriminator and dataset will be required to use this size.
+NUM_CLASSES = 10
+
+# Semi-supervised
+labelled_fraction = 0.10
+
 # As described in appendix A of DeepMind's AC-GAN paper
 optimizer_gen = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
 optimizer_dis = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
@@ -22,6 +32,10 @@ label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 # To disable label smoothing noise, just replace it with:
 #   lambda is_real, sz: 0
+
+# The relative weight assigned to the discriminator and classifier when training.
+loss_weights = {'discriminator': 1.0, 'classifier': 1.0}
+loss_func    = {'discriminator': 'binary_crossentropy', 'classifier': 'binary_crossentropy'}
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
@@ -84,3 +98,4 @@ class HaltRelativeLoss(object):
 _halting = HaltRelativeCorrectness()
 discriminator_halt = _halting.discriminator_halt
 generator_halt     = _halting.generator_halt
+classifier_halt    = lambda b, s: s >= 1

@@ -51,24 +51,23 @@ class MovingAverage(object):
 Y_REAL = 0
 Y_FAKE = 1
 
-class Data(object):
+class TrainData(object):
     def __init__(self, args):
-        train_data, train_labels = args.data.get_data("train")
+        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
         logger.info("Training data loaded from disk.")
 
-        train = zip(_data_stream(train_data, args.hyperparam.batch_size), _data_stream(train_labels, args.hyperparam.batch_size))
-
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
+        self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
         for p in args.preprocessor:
-            train = itertools.starmap(p.apply, train)
-        # Only keep the images, discard the labels
-        train = map(lambda x: x[0], train)
+            unlabelled = itertools.starmap(p.apply_train, unlabelled)
+            labelled   = itertools.starmap(p.apply_train, labelled)
+            logger.info("Applied test preprocessor {}.".format(p.__name__))
         
-        self.rand_vec = _random_stream(args.hyperparam.batch_size, args.generator.SEED_DIM)
+        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
+        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
         # Present images them in chunks of exactly batch-size:
-        self.real     = _image_stream_batch(train, args.hyperparam.batch_size)
-        self.raw      = (train_data, train_labels)
-        self.unapply  = functools.reduce(lambda f, g: lambda x: f(g(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
+        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
+        self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
 
         # Use to label a discriminator batch as real
         self._label_dis_real = map(lambda a, b: a + b,
@@ -86,6 +85,21 @@ class Data(object):
         # Use to label a generator batch as real
         self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
+class TestData(object):
+    def __init__(self, args, split):
+        assert split == "test" or split == "develop"
+        
+        num, labelled = args.data.get_data(split, args.hyperparam.batch_size)
+        logger.info("Training data loaded from disk.")
+
+        for p in args.preprocessor:
+            labelled   = itertools.starmap(p.apply_test, labelled)
+            logger.info("Applied test preprocessor {}.".format(p.__name__))
+
+        self.labelled = labelled
+        self.num_labelled = num
+        self.label_dis_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+
 #
 # Accuracy metric
 #
@@ -102,38 +116,53 @@ def label_fake(y_true, y_pred):
     assert Y_FAKE == 1
     return K.round(K.clip(y_pred, 0., 1.))
 
-METRICS = [label_real, label_fake]
+METRICS = [label_real, label_fake, 'accuracy']
+
+def get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model):
+    # Keras overwrites the names of metrics, so here we check that their order is as expected before creating a custom
+    # name array.
+    logger.debug("Metrics for gen_model: {}".format(gen_model.metrics_names))
+    assert gen_model.metrics_names == ['loss']
+    logger.debug("Metrics for dis_model_labelled: {}".format(dis_model_labelled.metrics_names))
+    assert dis_model_labelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'discriminator_acc', 'classifier_label_real', 'classifier_label_fake', 'classifier_acc']
+    logger.debug("Metrics for dis_model_unlabelled: {}".format(dis_model_unlabelled.metrics_names))
+    assert dis_model_unlabelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'discriminator_acc', 'classifier_label_real', 'classifier_label_fake', 'classifier_acc']
+    logger.debug("Metrics for com_model: {}".format(com_model.metrics_names))
+    assert com_model.metrics_names == ['loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake', 'model_discriminator_unlabelled_acc', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake', 'model_discriminator_unlabelled_acc']
+    
+    # Custom name array.
+    return ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'discriminator_acc', 'classifier_label_real', 'classifier_label_fake', 'classifier_acc']
 
 # TODO: Support reading test data.
-# TODO: Change convention so that the data class returns a generator. We can work with generators all the way down for
-#       better generalization.
-# TODO: Support randomization of input
 
 # A generator that enforces the batch-size of the input. Used to feed keras the right amount of data even with data 
 # augmentation increasing the batch size.
 def _image_stream_batch(itr, batch_size):
-    remainder = next(itr)
-    while True:
-        while remainder.shape[0] < batch_size:
-            remainder = np.concatenate((remainder, next(itr)))
-        yield remainder[:batch_size,...]
-        remainder = remainder[batch_size:,...]
+    rx, ry = next(itr)
+    if ry is None:
+        while True:
+            while rx.shape[0] < batch_size:
+                ax, ay = next(itr)
+                rx = np.concatenate((rx, ax))
+            yield (rx[:batch_size,...], None)
+            rx = rx[batch_size:,...]
+    else:
+        while True:
+            assert rx.shape[0] == ry.shape[0]
+            while rx.shape[0] < batch_size:
+                ax, ay = next(itr)
+                rx = np.concatenate((rx, ax))
+                ry = np.concatenate((ry, ay))
+            yield (rx[:batch_size,...], ry[:batch_size,...])
+            rx = rx[batch_size:,...]
+            ry = ry[batch_size:,...]
 
-def _data_stream(dataset, batch_size : int):
-    # The first index of the next batch:
-    i = 0 # Type: int
-    
+def _random_1hot_stream(batch_size : int, num_class):
     while True:
-        j = i + batch_size
-        # If we wrap around the back of the dataset:
-        if j >= dataset.shape[0]:
-            x = list(range(i, dataset.shape[0])) + list(range(0, j - dataset.shape[0]))
-            yield dataset[x,...]
-            i = j - dataset.shape[0]
-        else:
-            yield dataset[i:j,...]
-            i = j
-    return data_gen
+        z = np.zeros((batch_size, num_class))
+        q = np.random.randint(num_class, size=(batch_size,))
+        z[:,q] = 1
+        yield z
 
 # Produces a stream of random data
 def _random_stream(batch_size : int, img_size):
@@ -248,7 +277,7 @@ def resume(args, gen_model, dis_model):
         dis_model.load_weights(dis_fn, by_name=True)
         logger.info("Loaded discriminator weights from {}".format(dis_fn))
 
-        return gen_num + 1
+        return gen_num
 
     except Exception as e:
         logger.warn("Exception: {}".format(e))

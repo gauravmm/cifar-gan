@@ -1,4 +1,5 @@
 # Project-specific
+*.png
 experiments/*
 data/*.tfrecord
 data/labels.txt

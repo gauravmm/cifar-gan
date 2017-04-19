@@ -16,13 +16,13 @@ import sys
 import time
 
 import numpy as np
-
-import config
 import png
-import support
 import tensorflow as tf
 from keras import layers, models
-from keras_diagram import ascii
+from keras.utils import plot_model
+
+import config
+import support
 
 #
 # Init
@@ -60,89 +60,154 @@ def main(args):
     logger.info("Loaded hyperparameters: {}".format(args.hyperparam.__file__))
     logger.info("Loaded preprocessors  : {}".format(", ".join(a.__file__ for a in args.preprocessor)))
 
-    img_dim = args.generator.IMAGE_DIM
-
-
     #
     # Build Model
     #
 
-    gen_input  = layers.Input(shape=args.generator.SEED_DIM)
-    # dis_input  = layers.Input(shape=args.generator.IMAGE_DIM)
-    
     # Input/output tensors:
-    # Define and compile models
-    # We compose the discriminator onto the generator to produce the combined model:
-    gen_model = args.generator.generator(args.generator.SEED_DIM, args.generator.IMAGE_DIM)
-    dis_model = args.discriminator.discriminator(args.generator.IMAGE_DIM)
-    com_model = models.Model(inputs=[gen_input], outputs=[dis_model(gen_model(gen_input))], name='combined')
-
+    gen_input  = layers.Input(shape=args.hyperparam.SEED_DIM, name="input_gen_seed")
+    gen_label_input  = layers.Input(shape=(args.hyperparam.NUM_CLASSES,), name="input_gen_class")
+    dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM, name='input_dis')
+    
+    dis_output           = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
+    dis_model_labelled   = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_labelled')
+    dis_model_unlabelled = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_unlabelled')
+    
+    gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
+    gen_model = models.Model(inputs=[gen_input, gen_label_input], outputs=gen_output, name="model_generator")
     gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
-    dis_model.compile(optimizer=args.hyperparam.optimizer_dis, loss='binary_crossentropy', metrics=support.METRICS)
+    # We compose the discriminator onto the generator to produce the combined model:
+
+    _dis_model_compile = {
+            'optimizer': args.hyperparam.optimizer_dis,
+            'loss': [args.hyperparam.loss_func['discriminator'], args.hyperparam.loss_func['classifier']],
+            'metrics': support.METRICS
+        }
+    dis_model_labelled.compile(
+        loss_weights=[args.hyperparam.loss_weights['discriminator'], args.hyperparam.loss_weights['classifier']],
+        **_dis_model_compile)
+    dis_model_unlabelled.compile(loss_weights=[1, 0], **_dis_model_compile)
+    
+    com_model = models.Model(inputs=[gen_input, gen_label_input], outputs=dis_model_unlabelled(gen_model([gen_input, gen_label_input])), name='model_combined')
     # The trainable flag only takes effect upon compilation. By setting it False here, we allow the discriminator weights
     # to be updated in the step where we learn dis_model directly (compiled above), but not in the step where we learn
     # gen_model (compiled below). This behaviour is important, see comments in the training loop for details.
-    dis_model.trainable = False
-    com_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy', metrics=support.METRICS)
+    dis_model_unlabelled.trainable = False
+    com_model.compile(optimizer=args.hyperparam.optimizer_gen,
+                      loss=[args.hyperparam.loss_func['discriminator'], args.hyperparam.loss_func['classifier']],
+                      loss_weights=[1, 0],
+                      metrics=support.METRICS)
 
     logger.info("Compiled models.")
-    logger.debug("Generative model structure:\n{}".format(ascii(gen_model)))
-    logger.debug("Discriminative model structure:\n{}".format(ascii(dis_model)))
+    
+    for v, f in [(com_model, "com_model.png"), (dis_model_labelled, "dis_model_labelled.png"), (dis_model_unlabelled, "dis_model_unlabelled.png"), (gen_model, "gen_model.png")]:
+        plot_model(v, show_shapes=True, to_file=os.path.join(config.PATH['logs'], f))
+    logger.debug("Model structures written to {}".format(config.PATH['logs']))
 
+    metrics_names = support.get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model)
 
     #
     # Load weights
     #
 
-    if args.resume:
+    if args.split == "test":
+        logger.info("Attempting to load last checkpoint for testing.")
+        batch = support.resume(args, gen_model, dis_model_labelled)
+        if batch:
+            logger.info("Successfully loaded batch {}".format(batch))
+        else:
+            logger.warn("Could not load latest checkpoint for testing. Exiting...")
+            return
+    elif args.resume:
         logger.info("Attempting to resume from saved checkpoints.")
-        batch = support.resume(args, gen_model, dis_model)
+        batch = support.resume(args, gen_model, dis_model_labelled)
         if batch:
             logger.info("Successfully resumed from batch {}".format(batch))
         else:
-            logger.warn("Could not resume training.".format(batch))
+            logger.warn("Could not resume training.")
 
     # Clear the files
     if batch is None:
+        assert args.split == "train"
         batch = support.clear(args)
         
         # Write CSV file headers
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
                                             for a in ["composite", "discriminator+real", "discriminator+fake"]
-                                            for b in com_model.metrics_names) +
+                                            for b in metrics_names) +
                   ", discriminator_steps, generator_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
 
     assert batch is not None
-    
 
-    #
-    # Load data
-    #
-    
-    # NOTE: Keras requires Numpy input, so we cannot use Tensorflow's built-in data augmentation tools. We can instead use Keras' tools.
-    data = support.Data(args)
+    if args.split == "train":
+        try:
+            train(args, metrics_names, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt while training on batch {}.".format(batch))
+    elif args.split == "test":
+        try:
+            test(args, metrics_names, (dis_model_unlabelled, dis_model_labelled, gen_model, com_model))
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt while testing.")
+    else:
+        assert not "This state should not be reachable; the argparser should catch this case."
 
-    #
-    # Training
-    #
+def save_sample_images(args, data, batch, gen_model):
+    img_fn = config.get_filename('image', args, batch)
+    img_data = data.unapply(gen_model.predict([next(data.rand_vec), next(data.rand_label_vec)]))
+    png.from_array(support.arrange_images(img_data, args), 'RGB').save(img_fn)
+    logger.debug("Saved sample images to {}.".format(img_fn))
 
-    logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(com_model.metrics_names), args.log_interval))
+
+#
+# Training
+#
+
+def test(args, metrics_names, models):
+    dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
+
+    metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
+    data = support.TestData(args, "test")
+
+    logger.info("Starting tests.")
+    metrics = np.zeros(shape=len(metrics_names))
+    i = 0
+    for batch, d in enumerate(data.labelled):
+        data_x, data_y = d
+        m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
+        metrics += m
+        i += 1
+
+    metrics /= i
+    m = metric_wrap(metrics)
+    logger.debug(m)
+    logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
+    logger.info("Discriminator Accuracy: {:.1f}%".format(m['discriminator_label_real']*100))
+
+
+def train(args, metrics_names, models):
+    dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
+    global batch
+
+    data = support.TrainData(args)
+
+    logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(metrics_names), args.log_interval))
 
     # Loss value in the current log interval:
-    intv_com_loss = np.zeros(shape=len(com_model.metrics_names))
-    intv_dis_loss_real = np.zeros(shape=len(dis_model.metrics_names))
+    intv_com_loss = np.zeros(shape=len(metrics_names))
+    intv_dis_loss_real = np.zeros(shape=len(metrics_names))
     intv_dis_loss_fake = np.copy(intv_dis_loss_real)
     intv_com_count = 0
     intv_dis_count = 0
 
     # Format the score printing
-    zero_loss = lambda: np.asarray([0. for _ in com_model.metrics_names], dtype=np.float16)
-    print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(com_model.metrics_names, scores))
-    metric_wrap = lambda x: {k:v for k, v in zip(com_model.metrics_names, x)}
+    zero_loss = lambda: np.asarray([0. for _ in metrics_names], dtype=np.float16)
+    print_score = lambda scores: ", ".join("{}: {}".format(p, s) for p, s in zip(metrics_names, scores))
+    metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     for batch in range(batch, args.batches):
         logger.debug('Step {} of {}.'.format(batch, args.batches))
 
@@ -157,17 +222,33 @@ def main(args):
         while True:
             # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
             # fake images separately from real images.
-            loss_fake = dis_model.train_on_batch(gen_model.predict(next(data.rand_vec)),
-                                                 next(data.label_dis_fake))
+            fake_class = next(data.rand_label_vec)
+            loss_fake = dis_model_unlabelled.train_on_batch(
+                gen_model.predict([next(data.rand_vec), fake_class]),
+                [next(data.label_dis_fake), fake_class])
             step_dis_loss_fake += loss_fake
-            # Use real images, and train the model to predict them as real.
-            loss_real = dis_model.train_on_batch(next(data.real),
-                                                 next(data.label_dis_real))
+            
+            # Use real images (but not labels), and train the model to predict them as real.
+            data_x, _ = next(data.unlabelled)
+            loss_real = dis_model_unlabelled.train_on_batch(
+                data_x, 
+                [next(data.label_dis_real), fake_class])
             step_dis_loss_real += loss_real
 
             step_dis += 1
             if args.hyperparam.discriminator_halt(batch, step_dis, metric_wrap(loss_fake), metric_wrap(loss_real)):
                 break
+        
+        # Train with labels
+        step_dis_label = 0
+        while not args.hyperparam.classifier_halt(batch, step_dis_label):
+            data_x, data_y = next(data.labelled)
+            loss_label = dis_model_labelled.train_on_batch(
+                data_x,
+                [ next(data.label_dis_real), data_y ])
+            step_dis_loss_real += loss_real
+            step_dis_label += 1
+
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
         # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
@@ -178,14 +259,15 @@ def main(args):
         step_com = 0
         step_com_loss = zero_loss()
         while True:
-            loss = com_model.train_on_batch(next(data.rand_vec), next(data.label_gen_real))
+            fake_class = next(data.rand_label_vec)
+            loss = com_model.train_on_batch(
+                [ next(data.rand_vec), fake_class ],
+                [ next(data.label_gen_real), fake_class ])
             step_com_loss += loss
             
             step_com += 1
             if args.hyperparam.generator_halt(batch, step_com, metric_wrap(loss)):
                 break
-
-        logger.debug("In batch {}, dis was trained for {} steps, and gen for {}.".format(batch, step_dis, step_com))
 
         #
         # That is the entire training algorithm.
@@ -206,7 +288,6 @@ def main(args):
         intv_dis_count += step_dis
         intv_dis_loss_fake += step_dis_loss_fake
         intv_dis_loss_real += step_dis_loss_real
-        
         intv_com_loss += step_com_loss
         intv_com_count += step_com
         
@@ -233,14 +314,11 @@ def main(args):
             intv_dis_count = 0
 
             # Write image
-            img_fn = config.get_filename('image', args, batch)
-            img_data = data.unapply(gen_model.predict(next(data.rand_vec)))
-            png.from_array(support.arrange_images(img_data, args), 'RGB').save(img_fn)
-            logger.debug("Saved sample images to {}.".format(img_fn))
-
+            save_sample_images(args, data, batch, gen_model)
+            
             # Save weights
             gen_model.save_weights(config.get_filename('weight', args, 'gen', batch))
-            dis_model.save_weights(config.get_filename('weight', args, 'dis', batch))
+            dis_model_labelled.save_weights(config.get_filename('weight', args, 'dis', batch))
             logger.debug("Saved weights for batch {}.".format(batch))
 
 
@@ -248,8 +326,6 @@ if __name__ == '__main__':
     logger.info("Started")
     try:
         main(support.argparser().parse_args())
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt while processing batch {}".format(batch))
     except:
         raise
     finally:
