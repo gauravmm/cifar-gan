@@ -2,6 +2,7 @@
 
 import numpy as np
 from keras import optimizers
+from support import MovingAverage
 
 # Size of random seed used by the generator's input tensor:
 SEED_DIM = (32,)
