@@ -20,6 +20,31 @@ from typing import Tuple
 logger = logging.getLogger()
 
 #
+# Math
+#
+
+class MovingAverage(object):
+    def __init__(self, period):
+        self.period = period
+        self.i = 0
+        self.num = 0
+        self.vals = [0 for _ in range(period)]
+        self.mean = 0
+
+    def push(self, val):
+        self.num += 1
+        self.mean += (val - self.vals[self.i])/min(self.period, self.num)
+        self.vals[self.i] = val
+        self.i += 1
+        if self.i >= self.period:
+            self.i = 0
+            # Recalculate mean to prevent error drift.
+            self.mean = np.mean(self.vals)
+
+    def get(self):
+        return self.mean
+
+#
 # Data
 #
 

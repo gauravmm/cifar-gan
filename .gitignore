@@ -1,5 +1,6 @@
 # Project-specific
 *.png
+experiments/*
 data/*.tfrecord
 data/labels.txt
 train_logs/**/*

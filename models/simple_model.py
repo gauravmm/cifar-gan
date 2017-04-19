@@ -1,14 +1,16 @@
 """
 A simple model, containing both generator and discriminator.
 """
-from typing import Tuple
-
+import tensorflow as tf
+from keras import backend as K
 from keras import layers, models
 from keras.layers import (Activation, Conv2D, Conv2DTranspose, Dense, Dropout,
                           Flatten, Reshape)
 from keras.layers.advanced_activations import LeakyReLU
+from keras.layers.core import Lambda
 from keras.layers.merge import Concatenate
-from keras.models import Model
+from keras.models import Model, Sequential
+from typing import Tuple
 
 #
 # GENERATOR
@@ -18,6 +20,11 @@ from keras.models import Model
 NAME="Simple"
 #leaky relu coefficient
 alpha = 0.3
+
+def normalization(x):
+    x -= K.mean(x, axis=0, keepdims=True)
+    x /= K.std(x, axis=0, keepdims=True)
+    return x
 
 def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, layers.convolutional._Conv]:
     # We only allow the discriminator model to work on CIFAR-sized data.
@@ -31,15 +38,16 @@ def generator(inp, inp_label, output_size) -> Tuple[layers.convolutional._Conv, 
 
     layers = [
         Dense(256),
-        LeakyReLU(alpha),
+        LeakyReLU(0),
         Reshape((4, 4, -1)),
         Conv2DTranspose(256, (3, 3), padding = 'same', strides=(2, 2)),
-        LeakyReLU(alpha),
+        LeakyReLU(0),
         Conv2DTranspose(128, (3, 3), padding = 'same', strides=(2, 2)),
-        LeakyReLU(alpha),
+        LeakyReLU(0),
         Conv2DTranspose(64, (3, 3), padding = 'same', strides=(2, 2)),
-        LeakyReLU(alpha),
-        Conv2DTranspose(img_channels, (1, 1), activation='tanh', padding='same')
+        #Lambda(normalization),
+        LeakyReLU(0),
+        Conv2DTranspose(3, (1, 1), activation='tanh', padding='same')
     ]
 
     for l in layers:

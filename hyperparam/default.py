@@ -24,7 +24,7 @@ batch_size   = 128
 # many solutions have similar likelihood.) (2) this makes it likely that the GAN finds a solution that isn't the best.
 # We want to eventually implement an annealing schedule so we can control the rates of exploring and exploiting solutions.
 # Here's a good resource: http://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/
-label_flipping_prob = 0.05
+label_flipping_prob = 0.1
 # To disable this, just replace it with:
 #   label_flipping_prob = 0.0
 
@@ -37,10 +37,10 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 loss_weights = {'discriminator': 1.0, 'classifier': 1.0}
 loss_func    = {'discriminator': 'binary_crossentropy', 'classifier': 'binary_crossentropy'}
 
-class StepHalt(object):
+class HaltRelativeCorrectness(object):
     def __init__(self):
-        self.discriminator_correct = 0.60
-        self.generator_correct = 0.60
+        self.discriminator_correct = 0.51
+        self.generator_correct = 0.51
         self.min_step_dis = 1
         self.max_step_dis = 3
         self.min_step_gen = 4
@@ -71,7 +71,31 @@ class StepHalt(object):
         #    return True
         return False
 
-_halting = StepHalt()
-discriminator_halt = lambda b, s, l1, l2: s >= 1 # _halting.discriminator_halt
-generator_halt     = lambda b, s, l: s >= 4 # _halting.generator_halt
+class HaltRelativeLoss(object):
+    def __init__(self):
+        self.gen_to_dis_ratio = lambda gen_loss, dis_loss: 4.5 + 2.*(gen_loss-dis_loss)/dis_loss
+        self.gen_loss = MovingAverage(30)
+        self.dis_loss = MovingAverage(30)
+        self.last_batch = -1
+        self.curr_gen_ratio = 0
+        self.dis_steps = 2  # STOP AT TWO!
+
+    def discriminator_halt(self, batch, step, loss_fake, loss_real):
+        # Batch refers to the number of times the discriminator, then generator would be training.
+        # Step is the number of times the discriminator has been run within that batch
+        # Loss metric the loss in the previous iteration, as a key:value dict.
+        self.dis_loss.push(0.5*(loss_fake["loss"] + loss_real["loss"]))
+        return step >= self.dis_steps
+
+    def generator_halt(self, batch, step, loss):
+        if batch > self.last_batch:
+            self.last_batch = batch
+            self.curr_gen_ratio = self.gen_to_dis_ratio(self.gen_loss.get(), self.dis_loss.get())
+
+        self.gen_loss.push(loss["loss"])
+        return step >= self.curr_gen_ratio * self.dis_steps
+
+_halting = HaltRelativeCorrectness()
+discriminator_halt = _halting.discriminator_halt
+generator_halt     = _halting.generator_halt
 classifier_halt    = lambda b, s: s >= 1
