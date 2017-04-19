@@ -14,7 +14,7 @@ batch_size   = 128
 # many solutions have similar likelihood.) (2) this makes it likely that the GAN finds a solution that isn't the best.
 # We want to eventually implement an annealing schedule so we can control the rates of exploring and exploiting solutions.
 # Here's a good resource: http://www.inference.vc/instance-noise-a-trick-for-stabilising-gan-training/
-label_flipping_prob = 0.05
+label_flipping_prob = 0.1
 # To disable this, just replace it with:
 #   label_flipping_prob = 0.0
 
@@ -25,8 +25,8 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
-        self.discriminator_correct = 0.60
-        self.generator_correct = 0.60
+        self.discriminator_correct = 0.51
+        self.generator_correct = 0.51
         self.min_step_dis = 1
         self.max_step_dis = 3
         self.min_step_gen = 4
@@ -81,6 +81,6 @@ class HaltRelativeLoss(object):
         self.gen_loss.push(loss["loss"])
         return step >= self.curr_gen_ratio * self.dis_steps
 
-_halting = HaltRelativeLoss()
+_halting = HaltRelativeCorrectness()
 discriminator_halt = _halting.discriminator_halt
 generator_halt     = _halting.generator_halt
