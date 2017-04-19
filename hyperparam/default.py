@@ -54,7 +54,7 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_dis:
             return True
-        if (loss_fake["label_fake"] + loss_real["label_real"])/2 < self.discriminator_correct:
+        if (loss_fake["discriminator_label_fake"] + loss_real["discriminator_label_real"])/2 < self.discriminator_correct:
             return True
         #if (loss_fake["loss"] + loss_real["loss"])/2 < self.discriminator_loss:
         #    return True
@@ -65,7 +65,7 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_gen:
             return True
-        if loss["label_real"] < self.generator_correct:
+        if loss["discriminator_label_real"] < self.generator_correct:
             return True
         #if loss["loss"] < self.generator_loss:
         #    return True
