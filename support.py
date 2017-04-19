@@ -252,7 +252,7 @@ def resume(args, gen_model, dis_model):
         dis_model.load_weights(dis_fn, by_name=True)
         logger.info("Loaded discriminator weights from {}".format(dis_fn))
 
-        return gen_num + 1
+        return gen_num
 
     except Exception as e:
         logger.warn("Exception: {}".format(e))
