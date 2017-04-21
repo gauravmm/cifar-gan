@@ -186,7 +186,7 @@ def test(args, metrics_names, models):
     m = metric_wrap(metrics)
     logger.debug(m)
     logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
-    logger.info("Discriminator Accuracy: {:.1f}%".format(m['discriminator_label_real']*100))
+    logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
 
 
 def train(args, metrics_names, models):
