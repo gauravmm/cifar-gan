@@ -32,8 +32,7 @@ np.random.seed(54183)
 
 # Logging
 logging.getLogger("tensorflow").setLevel(logging.WARNING)
-support._make_path(config.PATH['logs'])
-logging.basicConfig(filename=os.path.join(config.PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
+logging.basicConfig(filename=config.PATH['log'], level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
@@ -100,10 +99,6 @@ def main(args):
 
     logger.info("Compiled models.")
     
-    for v, f in [(com_model, "com_model.png"), (dis_model_labelled, "dis_model_labelled.png"), (dis_model_unlabelled, "dis_model_unlabelled.png"), (gen_model, "gen_model.png")]:
-        plot_model(v, show_shapes=True, to_file=os.path.join(config.PATH['logs'], f))
-    logger.debug("Model structures written to {}".format(config.PATH['logs']))
-
     metrics_names = support.get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model)
 
     #
@@ -131,6 +126,11 @@ def main(args):
         assert args.split == "train"
         batch = support.clear(args)
         
+        for v, f in [(com_model, "com_model"), (dis_model_labelled, "dis_model_labelled"), (dis_model_unlabelled, "dis_model_unlabelled"), (gen_model, "gen_model")]:
+            fn = config.get_filename('struct', args, f)
+            plot_model(v, show_shapes=True, to_file=fn)
+            logger.debug("Model structure {} written to {}".format(v, fn))
+
         # Write CSV file headers
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 

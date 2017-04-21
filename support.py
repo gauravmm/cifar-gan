@@ -285,12 +285,10 @@ def resume(args, gen_model, dis_model):
         return None
 
 def clear(args):
-    _make_path(config.PATH["weights"])
-    _make_path(config.PATH["images"])
+    _make_path(config.get_filename('.', args))
 
     # Delete old weight checkpoints
-    for f in itertools.chain(glob.glob(config.get_filename('weight', args)),
-                             glob.glob(config.get_filename('image',  args))):
+    for f in itertools.chain(glob.glob(os.path.join(config.get_filename('.', args), "*"))):
         logger.debug("Deleting file {}".format(f))
         os.remove(f)
     logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
