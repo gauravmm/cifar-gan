@@ -136,7 +136,7 @@ def main(args):
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
                                             for a in ["composite", "discriminator+real", "discriminator+fake"]
                                             for b in metrics_names) +
-                  ", discriminator_steps, generator_steps",
+                  ", discriminator_steps, generator_steps, classifier_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
@@ -200,9 +200,11 @@ def train(args, metrics_names, models):
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(metrics_names))
     intv_dis_loss_real = np.zeros(shape=len(metrics_names))
-    intv_dis_loss_fake = np.copy(intv_dis_loss_real)
+    intv_dis_loss_fake = np.zeros(shape=len(metrics_names))
+    intv_cls_loss = np.zeros(shape=len(metrics_names))
     intv_com_count = 0
     intv_dis_count = 0
+    intv_cls_count = 0
 
     # Format the score printing
     zero_loss = lambda: np.asarray([0. for _ in metrics_names], dtype=np.float16)
@@ -239,15 +241,16 @@ def train(args, metrics_names, models):
             if args.hyperparam.discriminator_halt(batch, step_dis, metric_wrap(loss_fake), metric_wrap(loss_real)):
                 break
         
-        # Train with labels
-        step_dis_label = 0
-        while not args.hyperparam.classifier_halt(batch, step_dis_label):
+        # Train classifier
+        step_cls = 0
+        step_cls_loss = zero_loss()
+        while not args.hyperparam.classifier_halt(batch, step_cls):
             data_x, data_y = next(data.labelled)
             loss_label = dis_model_labelled.train_on_batch(
                 data_x,
                 [ next(data.label_dis_real), data_y ])
-            step_dis_loss_real += loss_real
-            step_dis_label += 1
+            step_cls_loss += loss_label
+            step_cls += 1
 
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
@@ -279,16 +282,20 @@ def train(args, metrics_names, models):
             print("{}, {}, {}, {}, {}, {}, {}".format(
                 int(time.time()),
                 batch,
-                fmt_metric(step_com_loss / step_com),
                 fmt_metric(step_dis_loss_real / step_dis),
                 fmt_metric(step_dis_loss_fake / step_dis),
+                fmt_metric(step_cls_loss / step_cls),
+                fmt_metric(step_com_loss / step_com),
                 step_dis,
                 step_com), file=csvfile)
         
-        intv_dis_count += step_dis
         intv_dis_loss_fake += step_dis_loss_fake
         intv_dis_loss_real += step_dis_loss_real
+        intv_cls_loss += step_cls_loss
         intv_com_loss += step_com_loss
+
+        intv_dis_count += step_dis
+        intv_cls_count += step_cls
         intv_com_count += step_com
         
         # Produce output every args.log_interval. We increment batch number because we have just finished the batch.
@@ -296,22 +303,21 @@ def train(args, metrics_names, models):
         if not batch % args.log_interval:
             logger.info("Completed batch {}/{}".format(batch, args.batches))
 
-            # Compute the average loss over this interval
-            intv_com_loss      /= intv_com_count
-            intv_dis_loss_fake /= intv_dis_count
-            intv_dis_loss_real /= intv_dis_count
-
-            # Log a summary
-            logger.info("Generator; {}.".format(print_score(intv_com_loss)))
-            logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real)))
-            logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake)))
+            # Log a summary of the average loss this interval
+            logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real / intv_dis_count)))
+            logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake / intv_dis_count)))
+            logger.info("Classifier; {}.".format(print_score(intv_cls_loss / intv_cls_count)))
+            logger.info("Generator; {}.".format(print_score(intv_com_loss / intv_com_count)))
 
             # Zero out the running counters
-            intv_com_loss[...]      = 0
             intv_dis_loss_fake[...] = 0
             intv_dis_loss_real[...] = 0
-            intv_com_count = 0
+            intv_cls_loss[...]      = 0
+            intv_com_loss[...]      = 0
+
             intv_dis_count = 0
+            intv_cls_count = 0
+            intv_com_count = 0
 
             # Write image
             save_sample_images(args, data, batch, gen_model)
