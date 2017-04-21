@@ -29,8 +29,7 @@ _FILENAME = {
          ".": lambda: None
 }
 def get_filename(t, cli_args, *args):
-    f = lambda x: x.split(".")[-1]
-
+    f = lambda x: ".".join(x.split(".")[1:])
     hstr = "{}-{}-{}-{}".format(f(cli_args.hyperparam.__name__),
                                 f(cli_args.generator.__name__),
                                 f(cli_args.discriminator.__name__),

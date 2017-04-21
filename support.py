@@ -58,10 +58,10 @@ class TrainData(object):
 
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
-        for p in args.preprocessor:
+        for p, np in zip(args.preprocessor, preproc_names(args)):
             unlabelled = itertools.starmap(p.apply_train, unlabelled)
             labelled   = itertools.starmap(p.apply_train, labelled)
-            logger.info("Applied test preprocessor {}.".format(p.__name__))
+            logger.info("Applied train preprocessor {}.".format(np))
         
         self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
         self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
@@ -92,9 +92,9 @@ class TestData(object):
         num, labelled = args.data.get_data(split, args.hyperparam.batch_size)
         logger.info("Training data loaded from disk.")
 
-        for p in args.preprocessor:
+        for p, np in zip(args.preprocessor, preproc_names(args)):
             labelled   = itertools.starmap(p.apply_test, labelled)
-            logger.info("Applied test preprocessor {}.".format(p.__name__))
+            logger.info("Applied test preprocessor {}.".format(np))
 
         self.labelled = labelled
         self.num_labelled = num
@@ -215,6 +215,7 @@ def _selection_stream(probs, *args):
         # into an actual value.
         yield np.choose(np.random.choice(len(ch), size=ch[0].shape, p=probs), ch)
 
+preproc_names = lambda args: [x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__ for x in args.preprocessor]
 
 #
 # Image handling
