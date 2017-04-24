@@ -9,7 +9,7 @@ function colorize() (
 export TF_CPP_MIN_LOG_LEVEL=2
 
 colorize python3 adversarial.py  \
-    --data          cifar10[frac=0.10,shuffle]    \
+    --data          cifar10[frac=1.0,shuffle]    \
     --preprocessor  normalize    \
     --generator     simple_model \
     --discriminator simple_model \
