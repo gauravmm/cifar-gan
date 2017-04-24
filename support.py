@@ -8,6 +8,7 @@ import importlib
 import itertools
 import logging
 import os
+import re
 import sys
 
 import numpy as np
@@ -302,7 +303,27 @@ def clear(args):
 
 def dynLoadModule(pkg):
     # Used to dynamically load modules in commandline options.
-    return lambda modname: importlib.import_module(pkg + "." + modname, package="")
+    def _loadActual(modnamefull):
+        m = re.fullmatch('(\w+)(\[((\w+(=[\w\.\+\-]+)?,?)*)\])?', modnamefull)
+        if m is None:
+            raise RuntimeError("Incorrect import.")
+        
+        modname = m.group(1)
+        l = importlib.import_module(pkg + "." + modname, package="")
+        
+        props = m.group(3)
+        if props is not None:
+            if hasattr(l, 'configure'):
+                props = (v.split('=', 1) for v in props.split(","))
+                props = {v[0]: (v[1] if len(v) == 2 else True) for v in props}
+                logger.debug("Configuring {}.{} with options: {}".format(pkg, modname, str(props)))
+                l.configure(props)
+            else:
+                raise RuntimeError('Options passed to item that does not support options.')
+
+        return l
+    
+    return _loadActual
 
 def argparser():
     parser = argparse.ArgumentParser(description='Train and test GAN models on data.')
@@ -319,7 +340,7 @@ def argparser():
     parser.add_argument('--batches', default=config.NUM_BATCHES_DEFAULT, type=int,
         help='the last batch number to process')
 
-    parser.add_argument('--data', default="cifar10",
+    parser.add_argument('--data',
         type=dynLoadModule("data"),
         help='the name of a file in the data package, used to specify the dataset loader')
     parser.add_argument('--hyperparam', default="default",
