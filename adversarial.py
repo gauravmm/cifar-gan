@@ -169,7 +169,7 @@ def save_sample_images(args, data, batch, gen_model):
 
 def test(args, metrics_names, models):
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
-    VERIFY_METRIC = False
+    VERIFY_METRIC = True
 
     metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     data = support.TestData(args, "test")
@@ -178,6 +178,7 @@ def test(args, metrics_names, models):
     metrics = np.zeros(shape=len(metrics_names))
     i = 0
     q = 0.0
+    k = None
     for batch, d in enumerate(data.labelled):
         data_x, data_y = d
         m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
@@ -186,6 +187,10 @@ def test(args, metrics_names, models):
         if VERIFY_METRIC:
             v = dis_model_labelled.predict(data_x)[1]
             q += np.sum(np.argmax(v, axis=1) == np.argmax(data_y, axis=1))/v.shape[0]
+            if k is None:
+                k = np.zeros((v.shape[1], v.shape[1]))
+            for (x, y) in zip(np.argmax(data_y, axis=1), np.argmax(v, axis=1)):
+                k[x, y] += 1.0/v.shape[0]
 
     metrics /= i
     m = metric_wrap(metrics)
@@ -193,6 +198,9 @@ def test(args, metrics_names, models):
     logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
     if VERIFY_METRIC:
         logger.info("Classifier Accuracy (compare): {:.1f}%".format(q/i*100))
+        k = k/i
+        k = k/np.sum(k, axis=0)*100.0
+        logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
     logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
 
 
