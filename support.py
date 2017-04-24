@@ -120,6 +120,8 @@ def label_fake(y_true, y_pred):
 METRICS = [label_real, label_fake, 'accuracy']
 
 def get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model):
+    logger = logging.getLogger("metric_names")
+
     # Keras overwrites the names of metrics, so here we check that their order is as expected before creating a custom
     # name array.
     logger.debug("Metrics for gen_model: {}".format(gen_model.metrics_names))
