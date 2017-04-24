@@ -32,8 +32,7 @@ np.random.seed(54183)
 
 # Logging
 logging.getLogger("tensorflow").setLevel(logging.WARNING)
-support._make_path(config.PATH['logs'])
-logging.basicConfig(filename=os.path.join(config.PATH['logs'], 'adversarial.log'), level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
+logging.basicConfig(filename=config.PATH['log'], level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
@@ -100,10 +99,6 @@ def main(args):
 
     logger.info("Compiled models.")
     
-    for v, f in [(com_model, "com_model.png"), (dis_model_labelled, "dis_model_labelled.png"), (dis_model_unlabelled, "dis_model_unlabelled.png"), (gen_model, "gen_model.png")]:
-        plot_model(v, show_shapes=True, to_file=os.path.join(config.PATH['logs'], f))
-    logger.debug("Model structures written to {}".format(config.PATH['logs']))
-
     metrics_names = support.get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model)
 
     #
@@ -131,12 +126,17 @@ def main(args):
         assert args.split == "train"
         batch = support.clear(args)
         
+        for v, f in [(com_model, "com_model"), (dis_model_labelled, "dis_model_labelled"), (dis_model_unlabelled, "dis_model_unlabelled"), (gen_model, "gen_model")]:
+            fn = config.get_filename('struct', args, f)
+            plot_model(v, show_shapes=True, to_file=fn)
+            logger.debug("Model structure {} written to {}".format(v, fn))
+
         # Write CSV file headers
         with open(config.get_filename('csv', args), 'w') as csvfile:
             print("time, batch, " + ", ".join("{} {}".format(a, b) 
                                             for a in ["composite", "discriminator+real", "discriminator+fake"]
                                             for b in metrics_names) +
-                  ", discriminator_steps, generator_steps",
+                  ", discriminator_steps, generator_steps, classifier_steps",
                   file=csvfile)
         logger.debug("Wrote headers to CSV file {}".format(csvfile.name))
 
@@ -169,6 +169,7 @@ def save_sample_images(args, data, batch, gen_model):
 
 def test(args, metrics_names, models):
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
+    VERIFY_METRIC = True
 
     metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     data = support.TestData(args, "test")
@@ -176,17 +177,31 @@ def test(args, metrics_names, models):
     logger.info("Starting tests.")
     metrics = np.zeros(shape=len(metrics_names))
     i = 0
+    q = 0.0
+    k = None
     for batch, d in enumerate(data.labelled):
         data_x, data_y = d
         m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
         metrics += m
         i += 1
+        if VERIFY_METRIC:
+            v = dis_model_labelled.predict(data_x)[1]
+            q += np.sum(np.argmax(v, axis=1) == np.argmax(data_y, axis=1))/v.shape[0]
+            if k is None:
+                k = np.zeros((v.shape[1], v.shape[1]))
+            for (x, y) in zip(np.argmax(data_y, axis=1), np.argmax(v, axis=1)):
+                k[x, y] += 1.0/v.shape[0]
 
     metrics /= i
     m = metric_wrap(metrics)
     logger.debug(m)
     logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
-    logger.info("Discriminator Accuracy: {:.1f}%".format(m['discriminator_label_real']*100))
+    if VERIFY_METRIC:
+        logger.info("Classifier Accuracy (compare): {:.1f}%".format(q/i*100))
+        k = k/i
+        k = k/np.sum(k, axis=0)*100.0
+        logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
+    logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
 
 
 def train(args, metrics_names, models):
@@ -200,9 +215,11 @@ def train(args, metrics_names, models):
     # Loss value in the current log interval:
     intv_com_loss = np.zeros(shape=len(metrics_names))
     intv_dis_loss_real = np.zeros(shape=len(metrics_names))
-    intv_dis_loss_fake = np.copy(intv_dis_loss_real)
+    intv_dis_loss_fake = np.zeros(shape=len(metrics_names))
+    intv_cls_loss = np.zeros(shape=len(metrics_names))
     intv_com_count = 0
     intv_dis_count = 0
+    intv_cls_count = 0
 
     # Format the score printing
     zero_loss = lambda: np.asarray([0. for _ in metrics_names], dtype=np.float16)
@@ -239,15 +256,16 @@ def train(args, metrics_names, models):
             if args.hyperparam.discriminator_halt(batch, step_dis, metric_wrap(loss_fake), metric_wrap(loss_real)):
                 break
         
-        # Train with labels
-        step_dis_label = 0
-        while not args.hyperparam.classifier_halt(batch, step_dis_label):
+        # Train classifier
+        step_cls = 0
+        step_cls_loss = zero_loss()
+        while not args.hyperparam.classifier_halt(batch, step_cls):
             data_x, data_y = next(data.labelled)
             loss_label = dis_model_labelled.train_on_batch(
                 data_x,
                 [ next(data.label_dis_real), data_y ])
-            step_dis_loss_real += loss_real
-            step_dis_label += 1
+            step_cls_loss += loss_label
+            step_cls += 1
 
 
         # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
@@ -279,16 +297,20 @@ def train(args, metrics_names, models):
             print("{}, {}, {}, {}, {}, {}, {}".format(
                 int(time.time()),
                 batch,
-                fmt_metric(step_com_loss / step_com),
                 fmt_metric(step_dis_loss_real / step_dis),
                 fmt_metric(step_dis_loss_fake / step_dis),
+                fmt_metric(step_cls_loss / step_cls),
+                fmt_metric(step_com_loss / step_com),
                 step_dis,
                 step_com), file=csvfile)
         
-        intv_dis_count += step_dis
         intv_dis_loss_fake += step_dis_loss_fake
         intv_dis_loss_real += step_dis_loss_real
+        intv_cls_loss += step_cls_loss
         intv_com_loss += step_com_loss
+
+        intv_dis_count += step_dis
+        intv_cls_count += step_cls
         intv_com_count += step_com
         
         # Produce output every args.log_interval. We increment batch number because we have just finished the batch.
@@ -296,22 +318,21 @@ def train(args, metrics_names, models):
         if not batch % args.log_interval:
             logger.info("Completed batch {}/{}".format(batch, args.batches))
 
-            # Compute the average loss over this interval
-            intv_com_loss      /= intv_com_count
-            intv_dis_loss_fake /= intv_dis_count
-            intv_dis_loss_real /= intv_dis_count
-
-            # Log a summary
-            logger.info("Generator; {}.".format(print_score(intv_com_loss)))
-            logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real)))
-            logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake)))
+            # Log a summary of the average loss this interval
+            logger.info("Discriminator on real; {}.".format(print_score(intv_dis_loss_real / intv_dis_count)))
+            logger.info("Discriminator on fake; {}.".format(print_score(intv_dis_loss_fake / intv_dis_count)))
+            logger.info("Classifier; {}.".format(print_score(intv_cls_loss / intv_cls_count)))
+            logger.info("Generator; {}.".format(print_score(intv_com_loss / intv_com_count)))
 
             # Zero out the running counters
-            intv_com_loss[...]      = 0
             intv_dis_loss_fake[...] = 0
             intv_dis_loss_real[...] = 0
-            intv_com_count = 0
+            intv_cls_loss[...]      = 0
+            intv_com_loss[...]      = 0
+
             intv_dis_count = 0
+            intv_cls_count = 0
+            intv_com_count = 0
 
             # Write image
             save_sample_images(args, data, batch, gen_model)

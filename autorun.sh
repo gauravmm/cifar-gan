@@ -17,7 +17,6 @@ else
 fi
 
 rm -r "train_logs"
-rm -r "weights"
 
 for commithash in "$@"
 do
@@ -47,7 +46,6 @@ do
 
     echo "$(date) Moving output folders." >> "$EXP_LOG"
     mv "train_logs" "$commithash/"
-    mv "weights" "$commithash/"
 
     echo "$(date) Done!" >> "$EXP_LOG"
 done
