@@ -36,7 +36,7 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 
 # The relative weight assigned to the discriminator and classifier when training.
 loss_weights = {'discriminator': 1.0, 'classifier': 1.0}
-loss_func    = {'discriminator': 'binary_crossentropy', 'classifier': 'binary_crossentropy'}
+loss_func    = {'discriminator': 'binary_crossentropy', 'classifier': 'categorical_crossentropy'}
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
