@@ -169,6 +169,7 @@ def save_sample_images(args, data, batch, gen_model):
 
 def test(args, metrics_names, models):
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
+    VERIFY_METRIC = False
 
     metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     data = support.TestData(args, "test")
@@ -176,16 +177,22 @@ def test(args, metrics_names, models):
     logger.info("Starting tests.")
     metrics = np.zeros(shape=len(metrics_names))
     i = 0
+    q = 0.0
     for batch, d in enumerate(data.labelled):
         data_x, data_y = d
         m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
         metrics += m
         i += 1
+        if VERIFY_METRIC:
+            v = dis_model_labelled.predict(data_x)[1]
+            q += np.sum(np.argmax(v, axis=1) == np.argmax(data_y, axis=1))/v.shape[0]
 
     metrics /= i
     m = metric_wrap(metrics)
     logger.debug(m)
     logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
+    if VERIFY_METRIC:
+        logger.info("Classifier Accuracy (compare): {:.1f}%".format(q/i*100))
     logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
 
 
