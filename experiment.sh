@@ -2,6 +2,7 @@
 # Suppress info logs
 export TF_CPP_MIN_LOG_LEVEL=2
 python3 adversarial.py           \
+    --data          cifar10[frac=0.10,shuffle]    \
     --preprocessor  normalize    \
     --generator     simple_model \
     --discriminator simple_model \
