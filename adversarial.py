@@ -68,11 +68,13 @@ def main(args):
     gen_label_input  = layers.Input(shape=(args.hyperparam.NUM_CLASSES,), name="input_gen_class")
     dis_input  = layers.Input(shape=args.hyperparam.IMAGE_DIM, name='input_dis')
     
-    dis_output           = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
+    with tf.variable_scope('discriminator'):
+        dis_output           = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
     dis_model_labelled   = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_labelled')
     dis_model_unlabelled = models.Model(inputs=dis_input, outputs=dis_output, name='model_discriminator_unlabelled')
     
-    gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
+    with tf.variable_scope('generator'):
+        gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
     gen_model = models.Model(inputs=[gen_input, gen_label_input], outputs=gen_output, name="model_generator")
     gen_model.compile(optimizer=args.hyperparam.optimizer_gen, loss='binary_crossentropy')
     # We compose the discriminator onto the generator to produce the combined model:
