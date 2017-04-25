@@ -1,7 +1,7 @@
 # Hyperparameters for optimization
 
 import numpy as np
-from keras import optimizers
+import tensorflow as tf
 from support import MovingAverage
 
 # Size of random seed used by the generator's input tensor:
@@ -15,8 +15,8 @@ NUM_CLASSES = 10
 labelled_fraction = 0.10
 
 # As described in appendix A of DeepMind's AC-GAN paper
-optimizer_gen = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
-optimizer_dis = optimizers.Adam(lr=0.0002, beta_1=0.5, beta_2=0.999, epsilon=1e-08, decay=1e-8)
+optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.00005)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 #optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
 batch_size   = 128
 

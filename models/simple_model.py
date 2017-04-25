@@ -105,9 +105,11 @@ def discriminator(inp, num_classes):
                              bias_initializer=init_gamma)
         
         y1 = Dense(1, activation=tf.sigmoid, name='discriminator')(y1)
+        y1 = tf.squeeze(y1)
 
     with tf.name_scope('classifier'):
         y2 = Dense(num_classes, activation=tf.sigmoid, name='classifier')(x)
+        y2 = tf.squeeze(y2)
 
     # Return (discriminator, classifier)
     return (y1, y2)
