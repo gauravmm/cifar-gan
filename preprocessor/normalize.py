@@ -1,6 +1,6 @@
 # Preprocessor that normalizes the input.
 
-import tensorflow as tf
+import numpy as np
 
 def apply(inp, label):
     """
@@ -10,7 +10,7 @@ def apply(inp, label):
     You may create or remove elements from the batch as necessary.
     """
 
-    return (tf.cast(inp, tf.float32)/127.5 - 1.0, label)
+    return (inp.astype(np.float32)/127.5 - 1.0, label)
 
 apply_test = apply
 apply_train = apply
@@ -21,5 +21,7 @@ def unapply(inp):
     Inverts the transformation to input, returning a single ndarray. This is used to display generated images.
     You may not create or remove elements from the batch.
     """
-    inp = tf.clip_by_value((inp + 1.0) * 127.5, 0.0, 1.0)
-    return tf.cast(inp, tf.uint8)
+    inp = (inp + 1.0) * 127.5
+    inp[inp>255] = 255
+    inp[inp<0] = 0
+    return inp.astype(np.uint8)
