@@ -3,6 +3,7 @@
 experiments/*
 data/*.tfrecord
 data/labels.txt
+data/CIFAR-10
 train_logs/**/*
 .vscode/**
 weights/**
