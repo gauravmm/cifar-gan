@@ -51,7 +51,7 @@ def gen(d, batch_size, wrap=True):
 def configure(props):
     if "shuffle" in props:
         _shuffle = True
-        logger.info("Shuffling.")
+        logger.info("Configure: Enabled shuffling data.")
 
     if "frac" in props:
         f = float(props["frac"])
@@ -60,7 +60,7 @@ def configure(props):
         if f <= 0.0:
             raise RuntimeError("Data fraction must be > 0.0")
         _data_frac = f
-        logger.info("Training set fraction is {}".format(_data_frac))
+        logger.info("Configure: Training set fraction is {}".format(_data_frac))
 
 def get_data(split, batch_size, labelled_fraction=1.0):
     """The provider function in a dataset.

@@ -14,7 +14,6 @@ import sys
 import numpy as np
 
 import config
-import keras.backend as K
 from config import IMAGE_GUTTER
 from typing import Tuple
 
@@ -54,40 +53,40 @@ Y_FAKE = 1
 
 class TrainData(object):
     def __init__(self, args):
-        with tf.name_scope('input'):
-            unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
-            logger.info("Training data loaded from disk.")
+        logger = logging.getLogger("traindata")
 
-        with tf.name_scope('preprocessing'):
-            # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
-            self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
-            for p, np in zip(args.preprocessor, preproc_names(args)):
-                unlabelled = itertools.starmap(p.apply_train, unlabelled)
-                labelled   = itertools.starmap(p.apply_train, labelled)
-                logger.info("Applied train preprocessor {}.".format(np))
+        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
+        logger.info("Training data loaded from disk.")
 
-        with tf.name_scope('labels'):
-            self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
-            self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
-            # Present images them in chunks of exactly batch-size:
-            self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
-            self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
+        # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
+        self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
+        for p, np in zip(args.preprocessor, preproc_names(args)):
+            unlabelled = itertools.starmap(p.apply_train, unlabelled)
+            labelled   = itertools.starmap(p.apply_train, labelled)
+            logger.info("Applied train preprocessor {}.".format(np))
 
-            # Use to label a discriminator batch as real
-            self._label_dis_real = map(lambda a, b: a + b,
-                                _value_stream(args.hyperparam.batch_size, Y_REAL),
-                                _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.batch_size)))
-            # Use to label a discriminator batch as fake
-            self._label_dis_fake = map(lambda a, b: a + b,
-                                _value_stream(args.hyperparam.batch_size, Y_FAKE),
-                                _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
-            # Random flipping support
-            self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                    self._label_dis_fake, self._label_dis_real)
-            self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                    self._label_dis_real, self._label_dis_fake)
-            # Use to label a generator batch as real
-            self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+
+        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
+        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
+        # Present images them in chunks of exactly batch-size:
+        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
+        self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
+
+        # Use to label a discriminator batch as real
+        self._label_dis_real = map(lambda a, b: a + b,
+                            _value_stream(args.hyperparam.batch_size, Y_REAL),
+                            _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.batch_size)))
+        # Use to label a discriminator batch as fake
+        self._label_dis_fake = map(lambda a, b: a + b,
+                            _value_stream(args.hyperparam.batch_size, Y_FAKE),
+                            _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
+        # Random flipping support
+        self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
+                                                self._label_dis_fake, self._label_dis_real)
+        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
+                                                self._label_dis_real, self._label_dis_fake)
+        # Use to label a generator batch as real
+        self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
 class TestData(object):
     def __init__(self, args, split):

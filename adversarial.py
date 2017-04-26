@@ -57,39 +57,46 @@ def main(args):
     if args.split == "train":
         train(args)
     elif args.split == "test":
-        sv = tf.train.Supervisor(logdir="train", global_step=global_step, saver=None)
+        sv = tf.train.Supervisor(logdir=config.get_filename(args), global_step=global_step, saver=None)
         with sv.managed_session() as sess:
             test(args, (gen_input, gen_label_input, gen_output, dis_input, dis_output_real_dis, dis_output_real_cls,
                         dis_output_fake_dis, dis_output_fake_cls))
     else:
         assert not "This state should not be reachable; the argparser should catch this case."
 
-def train(args, metrics_names, models):
+_shape_str = lambda a: "(" + ", ".join("?" if b is None else str(b) for b in a) + ")"
+def train(args):
     logger = logging.getLogger("train")
 
-    sv = tf.train.Supervisor(logdir="train", global_step=global_step, save_summaries_secs=60, save_model_secs=600)
-    with sv.managed_session() as sess:        
-        # Build Model
-        gen_input  = tf.placeholder(tf.float32, shape=args.hyperparam.SEED_DIM, name="input_gen_seed")
-        gen_label_input  = tf.placeholder(tf.float32, shape=(args.hyperparam.NUM_CLASSES,), name="input_gen_class")
-        with tf.variable_scope('model_generator'):
-            gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
+    #
+    # Build Model
+    #
+    
+    global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        dis_input  = tf.placeholder(tf.float32, shape=args.hyperparam.IMAGE_SIZE, name="input_dis")
-        with tf.variable_scope('model_discriminator') as disc_scope:
-            dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
-            disc_scope.reuse_variables()
-            dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
+    gen_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
+    gen_label_input  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
+    with tf.variable_scope('model_generator'):
+        gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
+        if not str(gen_output.get_shape()) == _shape_str([None] + list(args.hyperparam.IMAGE_DIM)):
+            logger.error("Generator output size is incorrect! Expected: {}, actual: {}".format(
+                    str(gen_output.get_shape()), _shape_str([None] + list(args.hyperparam.IMAGE_DIM))))
 
-        batch = tf.Variable(0, name='global_step', trainable=False)
-        logger.info("Model constructed.")
+    dis_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis")
+    with tf.variable_scope('model_discriminator') as disc_scope:
+        dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
+        disc_scope.reuse_variables()
+        dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
 
-        # Prepare data
-        data = support.TrainData(args)
+    logger.info("Model constructed.")
+    data = support.TrainData(args)
+
+    sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, save_summaries_secs=60, save_model_secs=600)
+    with sv.managed_session() as sess:
 
         # Prepare summaries
         tf.summary.image('summary/generator', data.unapply(), max_outputs=8)
-    """
+        """
         # Prepare summaries:
         
         tf.summary.scalar('summary/discriminator_loss', discriminator_loss)
@@ -121,7 +128,7 @@ def train(args, metrics_names, models):
         logger.info("Compiled models.")
         
         metrics_names = support.get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model)
-    """
+        """
 
 
         logger.info("Starting training. Reporting metrics {} every {} steps.".format(", ".join(metrics_names), args.log_interval))
