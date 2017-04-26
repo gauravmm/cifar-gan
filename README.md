@@ -20,9 +20,8 @@ We are all going to report our experiments and results on the Google Sheet [here
 This codebase is targeted at Python 3.5
 
 1. Set up Ubuntu 16.04 (or higher) on a machine.
-2. Using your package manager, install `numpy graphviz`.
-3. Follow the installation instructions [here](https://www.tensorflow.org/install/install_linux#InstallingNativePip) to install TensorFlow.
-4. Install prerequisites using `pip3 install mypy-lang graphviz h5py pypng git+https://github.com/fchollet/keras.git git+https://github.com/nlhepler/pydot`
+2. Follow the installation instructions [here](https://www.tensorflow.org/install/install_linux#InstallingNativePip) to install TensorFlow.
+3. Download and extract [this dataset](https://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz) in `data/cifar-10-batches-bin`.
 
 To get started with development:
 

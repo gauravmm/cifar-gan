@@ -68,8 +68,7 @@ def train(args, metrics_names, models):
     logger = logging.getLogger("train")
 
     sv = tf.train.Supervisor(logdir="train", global_step=global_step, save_summaries_secs=60, save_model_secs=600)
-    with sv.managed_session() as sess:
-        
+    with sv.managed_session() as sess:        
         # Build Model
         gen_input  = tf.placeholder(tf.float32, shape=args.hyperparam.SEED_DIM, name="input_gen_seed")
         gen_label_input  = tf.placeholder(tf.float32, shape=(args.hyperparam.NUM_CLASSES,), name="input_gen_class")
@@ -83,15 +82,16 @@ def train(args, metrics_names, models):
             dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
 
         batch = tf.Variable(0, name='global_step', trainable=False)
+        logger.info("Model constructed.")
 
-        dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
-
+        # Prepare data
         data = support.TrainData(args)
 
-
+        # Prepare summaries
+        tf.summary.image('summary/generator', data.unapply(), max_outputs=8)
     """
         # Prepare summaries:
-        tf.summary.image('summary/generator', generator_visualisation, max_outputs=8)
+        
         tf.summary.scalar('summary/discriminator_loss', discriminator_loss)
         tf.summary.scalar('summary/generator_loss', generator_loss)
 
