@@ -1,7 +1,9 @@
 # Preprocessor that normalizes the input.
 
 import numpy as np
+import tensorflow as tf
 
+# Forward must be applied in np
 def apply(inp, label):
     """
     Applies transformations to input and labels, returning a tuple of (preprocessed_input, preprocessed_labels).
@@ -15,13 +17,11 @@ def apply(inp, label):
 apply_test = apply
 apply_train = apply
 
-# Reverse 
+# Reverse must be implemented in tf
 def unapply(inp):
     """
-    Inverts the transformation to input, returning a single ndarray. This is used to display generated images.
+    Inverts the transformation to input, using TensorFlow. This is used to display generated images.
     You may not create or remove elements from the batch.
     """
     inp = (inp + 1.0) * 127.5
-    inp[inp>255] = 255
-    inp[inp<0] = 0
-    return inp.astype(np.uint8)
+    return tf.cast(inp, tf.uint8)

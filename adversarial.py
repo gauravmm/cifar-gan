@@ -82,20 +82,41 @@ def train(args):
             logger.error("Generator output size is incorrect! Expected: {}, actual: {}".format(
                     str(gen_output.get_shape()), _shape_str([None] + list(args.hyperparam.IMAGE_DIM))))
 
-    dis_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis")
+    dis_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis_image")
+    dis_label  = tf.placeholder(tf.float32, shape=[None, 1], name="input_dis_label")
+    dis_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
     with tf.variable_scope('model_discriminator') as disc_scope:
         dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
         disc_scope.reuse_variables()
         dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
 
+    dis_loss_real = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label))
+    dis_loss_fake = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+    gen_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+    gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_class, logits=gen_label_input))
+    gen_loss = args.hyperparam.loss_weights_real["discriminator"] * gen_loss_dis \
+             + args.hyperparam.loss_weights_real["classifier"]    * gen_loss_cls
+
     logger.info("Model constructed.")
     data = support.TrainData(args)
+
+    # Prepare summaries:
+    assert support.Y_REAL == 0 and support.Y_FAKE == 1
+    tf.summary.image('summary/generator/output', data.unapply(gen_output), max_outputs=8)
+    tf.summary.scalar('summary/generator/loss', gen_loss)
+    tf.summary.scalar('summary/generator/fooling_rate', tf.reduce_sum(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32)))
+    tf.summary.scalar('summary/discriminator/real/loss', dis_loss_real)
+    tf.summary.scalar('summary/discriminator/real/true_pos', tf.reduce_sum(tf.cast(tf.less(dis_output_real_dis, 0.5), tf.int32)))
+    tf.summary.scalar('summary/discriminator/fake/loss', dis_loss_fake)
+    tf.summary.scalar('summary/discriminator/fake/true_neg', tf.reduce_sum(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32)))
+    tf.summary.scalar('summary/classifier/true_neg', tf.reduce_sum(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32)))
+
+
 
     sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, save_summaries_secs=60, save_model_secs=600)
     with sv.managed_session() as sess:
 
-        # Prepare summaries
-        tf.summary.image('summary/generator', data.unapply(), max_outputs=8)
+        
         """
         # Prepare summaries:
         
