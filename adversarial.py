@@ -75,20 +75,39 @@ def train(args):
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
     gen_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
-    gen_label_input  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
+    gen_input_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
     with tf.variable_scope('model_generator'):
-        gen_output = args.generator.generator(gen_input, gen_label_input, args.hyperparam.IMAGE_DIM)
+        gen_output = args.generator.generator(gen_input, gen_input_class, args.hyperparam.IMAGE_DIM)
+        
+        # Sanity checking output
         if not str(gen_output.get_shape()) == _shape_str([None] + list(args.hyperparam.IMAGE_DIM)):
             logger.error("Generator output size is incorrect! Expected: {}, actual: {}".format(
-                    str(gen_output.get_shape()), _shape_str([None] + list(args.hyperparam.IMAGE_DIM))))
+                    _shape_str([None] + list(args.hyperparam.IMAGE_DIM))), str(gen_output.get_shape()))
 
     dis_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis_image")
-    dis_label  = tf.placeholder(tf.float32, shape=[None, 1], name="input_dis_label")
+    dis_label  = tf.placeholder(tf.float32, shape=[None], name="input_dis_label")
     dis_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
     with tf.variable_scope('model_discriminator') as disc_scope:
         dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
         disc_scope.reuse_variables()
         dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
+
+        # Sanity checking output
+        if not str(dis_output_real_dis.get_shape()) == _shape_str([None]) or \
+           not str(dis_output_real_dis.get_shape()) == _shape_str([None]):
+            logger.error("Discriminator dis (y1) output size is incorrect! Expected: {}, actual: {} and {}".format(
+                _shape_str([None]),
+                str(dis_output_real_dis.get_shape()),
+                str(dis_output_real_dis.get_shape())))
+            return
+
+        if not str(dis_output_real_cls.get_shape()) == _shape_str([None]) or \
+           not str(dis_output_fake_cls.get_shape()) == _shape_str([None]):
+            logger.error("Discriminator cls (y2) output size is incorrect! Expected: {}, actual: {} and {}".format(
+                _shape_str([None]),
+                str(dis_output_real_cls.get_shape()),
+                str(dis_output_fake_cls.get_shape())))
+            return
 
     # Discriminator losses
     dis_loss_real = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label))
@@ -102,7 +121,7 @@ def train(args):
 
     # Generator loss
     gen_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
-    gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_label_input, logits=dis_output_fake_cls))
+    gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_input_class, logits=dis_output_fake_cls))
     gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
              + args.hyperparam.loss_weights_generator["classifier"]    * gen_loss_cls
 
@@ -158,7 +177,7 @@ def train(args):
         logger.info("Starting training. Saving model every {}s.".format(args.log_interval))
 
         # Format the score printing
-        while sv.should_stop():
+        while not sv.should_stop():
             batch = sess.run(global_step)
             logger.debug('Step {} of {}.'.format(batch, args.batches))
 
@@ -173,7 +192,7 @@ def train(args):
                 # fake images separately from real images.
                 loss_fake, fake_true_neg = sess.run([train_dis_fake, train_dis_fake_true_neg], feed_dict={
                     gen_input: next(data.rand_vec),
-                    gen_label_input: next(data.rand_label_vec),
+                    gen_input_class: next(data.rand_label_vec),
                     dis_label: next(data.label_dis_fake)
                 })
                 
@@ -188,7 +207,7 @@ def train(args):
                     {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
                      "real_loss": loss_real, "real_true_pos": real_true_pos}):
                     break
-            # Log in tensorboard
+            # Log the number of steps
             sess.run(tf.assign(log_step_dis, step_dis))
 
             # Train classifier

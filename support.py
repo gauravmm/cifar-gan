@@ -60,10 +60,10 @@ class TrainData(object):
 
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
-        for p, np in zip(args.preprocessor, preproc_names(args)):
+        for p, namep in zip(args.preprocessor, preproc_names(args)):
             unlabelled = itertools.starmap(p.apply_train, unlabelled)
             labelled   = itertools.starmap(p.apply_train, labelled)
-            logger.info("Applied train preprocessor {}.".format(np))
+            logger.info("Applied train preprocessor {}.".format(namep))
 
 
         self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
@@ -81,10 +81,8 @@ class TrainData(object):
                             _value_stream(args.hyperparam.batch_size, Y_FAKE),
                             _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
         # Random flipping support
-        self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                self._label_dis_fake, self._label_dis_real)
-        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                self._label_dis_real, self._label_dis_fake)
+        self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob], self._label_dis_fake, self._label_dis_real)
+        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob], self._label_dis_real, self._label_dis_fake)
         # Use to label a generator batch as real
         self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
