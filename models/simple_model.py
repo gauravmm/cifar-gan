@@ -74,24 +74,24 @@ def discriminator(inp, num_classes):
     x = tf.layers.dense(x, 64, name='fc1',
                         kernel_initializer=init_kernel,
                         bias_initializer=init_bias)
-    
+
     x = tf.layers.conv2d(x, 128, (3, 3), strides=(2, 2), padding="SAME", name="c2d2", 
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
-    
+
     x = tf.layers.conv2d(x, 256, (3, 3), strides=(2, 2), padding="SAME", name="c2d3",
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
-    
+
     x = tf.layers.conv2d(x, 512, (3, 3), strides=(2, 2), padding="SAME", name="c2d4",
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
-    
+
     x = tf.contrib.layers.flatten(x)
-    
+
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
@@ -100,13 +100,12 @@ def discriminator(inp, num_classes):
                              activation=leakyReLu,
                              kernel_initializer=init_kernel,
                              bias_initializer=init_bias)
-        
+
         y1 = tf.layers.dense(y1, 1, activation=tf.sigmoid, name='discriminator')
-        y1 = tf.squeeze(y1)
+        y1 = tf.squeeze(y1, 1)
 
     with tf.name_scope('classifier'):
         y2 = tf.layers.dense(x, num_classes, activation=tf.sigmoid, name='classifier')
-        y2 = tf.squeeze(y2)
 
     # Return (discriminator, classifier)
     return (y1, y2)

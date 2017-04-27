@@ -82,27 +82,29 @@ def train(args):
         # Sanity checking output
         if not str(gen_output.get_shape()) == _shape_str([None] + list(args.hyperparam.IMAGE_DIM)):
             logger.error("Generator output size is incorrect! Expected: {}, actual: {}".format(
-                    _shape_str([None] + list(args.hyperparam.IMAGE_DIM))), str(gen_output.get_shape()))
+                    _shape_str([None] + list(args.hyperparam.IMAGE_DIM)), str(gen_output.get_shape())))
 
     dis_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis_image")
     dis_label  = tf.placeholder(tf.float32, shape=[None], name="input_dis_label")
     dis_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
     with tf.variable_scope('model_discriminator') as disc_scope:
+        # Make sure that the generator and real images are the same size:
+        assert str(gen_output.get_shape()) == str(dis_input.get_shape())
         dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
         disc_scope.reuse_variables()
         dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
 
         # Sanity checking output
-        if not str(dis_output_real_dis.get_shape()) == _shape_str([None]) or \
-           not str(dis_output_real_dis.get_shape()) == _shape_str([None]):
+        if not str(dis_output_real_dis.get_shape()) == "(?,)" or \
+           not str(dis_output_real_dis.get_shape()) == "(?,)":
             logger.error("Discriminator dis (y1) output size is incorrect! Expected: {}, actual: {} and {}".format(
-                _shape_str([None]),
+                "(?,)",
                 str(dis_output_real_dis.get_shape()),
                 str(dis_output_real_dis.get_shape())))
             return
 
-        if not str(dis_output_real_cls.get_shape()) == _shape_str([None]) or \
-           not str(dis_output_fake_cls.get_shape()) == _shape_str([None]):
+        if not str(dis_output_real_cls.get_shape()) == _shape_str([None, args.hyperparam.NUM_CLASSES]) or \
+           not str(dis_output_fake_cls.get_shape()) == _shape_str([None, args.hyperparam.NUM_CLASSES]):
             logger.error("Discriminator cls (y2) output size is incorrect! Expected: {}, actual: {} and {}".format(
                 _shape_str([None]),
                 str(dis_output_real_cls.get_shape()),
