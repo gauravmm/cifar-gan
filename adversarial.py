@@ -59,7 +59,7 @@ def main(args):
     elif args.split == "test":
         sv = tf.train.Supervisor(logdir=config.get_filename(args), global_step=global_step, saver=None)
         with sv.managed_session() as sess:
-            test(args, (gen_input, gen_label_input, gen_output, dis_input, dis_output_real_dis, dis_output_real_cls,
+            test(args, (gen_input_seed, gen_label_input, gen_output, dis_input, dis_output_real_dis, dis_output_real_cls,
                         dis_output_fake_dis, dis_output_fake_cls))
     else:
         assert not "This state should not be reachable; the argparser should catch this case."
@@ -74,10 +74,10 @@ def train(args):
     
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    gen_input  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
+    gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
     gen_input_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
     with tf.variable_scope('model_generator'):
-        gen_output = args.generator.generator(gen_input, gen_input_class, args.hyperparam.IMAGE_DIM)
+        gen_output = args.generator.generator(gen_input_seed, gen_input_class, args.hyperparam.IMAGE_DIM)
         
         # Sanity checking output
         if not str(gen_output.get_shape()) == _shape_str([None] + list(args.hyperparam.IMAGE_DIM)):
@@ -111,23 +111,33 @@ def train(args):
                 str(dis_output_fake_cls.get_shape())))
             return
 
-    # Discriminator losses
-    dis_loss_real = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label))
-    dis_loss_fake = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+    with tf.name_scope('loss'):
+        # Discriminator losses
+        with tf.name_scope('dis_fake'):
+            dis_loss_fake = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+        with tf.name_scope('dis_real'):
+            dis_loss_real = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label))
 
-    # Classifier loss
-    cls_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
-    cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_label, logits=dis_output_real_cls))
-    cls_loss = args.hyperparam.loss_weights_classifier["discriminator"] * cls_loss_dis \
-             + args.hyperparam.loss_weights_classifier["classifier"]    * cls_loss_cls
+        # Classifier loss
+        with tf.name_scope('cls'):
+            with tf.name_scope('dis'):
+                cls_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+            with tf.name_scope('cls'):
+                cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_label, logits=dis_output_real_cls))
+            cls_loss = args.hyperparam.loss_weights_classifier["discriminator"] * cls_loss_dis \
+                    + args.hyperparam.loss_weights_classifier["classifier"]    * cls_loss_cls
 
-    # Generator loss
-    gen_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
-    gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_input_class, logits=dis_output_fake_cls))
-    gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
-             + args.hyperparam.loss_weights_generator["classifier"]    * gen_loss_cls
+        # Generator loss
+        with tf.name_scope('gen'):
+            with tf.name_scope('dis'):
+                gen_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+            with tf.name_scope('cls'):
+                gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_input_class, logits=dis_output_fake_cls))
+            gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
+                     + args.hyperparam.loss_weights_generator["classifier"]    * gen_loss_cls
 
-    logger.info("Model constructed.")
+        logger.info("Model constructed.")
+
     data = support.TrainData(args)
 
     variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -135,14 +145,15 @@ def train(args):
     generator_variables     = [v for v in variables if 'model_generator/' in v.name]
 
     # Train ops
-    train_dis_real = args.hyperparam.optimizer_dis. \
-                          minimize(dis_loss_real, var_list=discriminator_variables)
-    train_dis_fake = args.hyperparam.optimizer_dis. \
-                          minimize(dis_loss_fake, var_list=discriminator_variables)
-    train_cls = args.hyperparam.optimizer_cls. \
-                          minimize(gen_loss, var_list=discriminator_variables)
-    train_gen = args.hyperparam.optimizer_gen. \
-                          minimize(gen_loss, var_list=generator_variables)
+    with tf.name_scope('train_ops'):
+        train_dis_fake = args.hyperparam.optimizer_dis. \
+                            minimize(dis_loss_fake, var_list=discriminator_variables)
+        train_dis_real = args.hyperparam.optimizer_dis. \
+                            minimize(dis_loss_real, var_list=discriminator_variables)
+        train_cls = args.hyperparam.optimizer_cls. \
+                            minimize(gen_loss, var_list=discriminator_variables)
+        train_gen = args.hyperparam.optimizer_gen. \
+                            minimize(gen_loss, var_list=generator_variables)
 
     # Prepare summaries, in order of train loss above:
     assert support.Y_REAL == 0 and support.Y_FAKE == 1
@@ -174,7 +185,7 @@ def train(args):
             tf.summary.scalar('classifier', log_step_cls)
             tf.summary.scalar('generator', log_step_gen)
 
-    sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, save_summaries_secs=60, save_model_secs=args.log_interval)
+    sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
     with sv.managed_session() as sess:
         logger.info("Starting training. Saving model every {}s.".format(args.log_interval))
 
@@ -191,9 +202,8 @@ def train(args):
             step_dis = 0
             while True:
                 # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
-                # fake images separately from real images.
-                loss_fake, fake_true_neg = sess.run([train_dis_fake, train_dis_fake_true_neg], feed_dict={
-                    gen_input: next(data.rand_vec),
+                _, loss_fake, fake_true_neg = sess.run([train_dis_fake, dis_loss_fake, train_dis_fake_true_neg], feed_dict={
+                    gen_input_seed: next(data.rand_vec),
                     gen_input_class: next(data.rand_label_vec),
                     dis_label: next(data.label_dis_fake)
                 })

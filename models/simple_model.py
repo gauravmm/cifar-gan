@@ -32,13 +32,13 @@ def generator(inp, inp_label, output_size):
                         kernel_initializer=init_kernel,
                         bias_initializer=init_bias)
 
-    x = tf.reshape(x, [-1, 4, 4, 512])
-    
+    x = tf.reshape(x, [-1, 4, 4, 16])
+
     x = tf.layers.conv2d_transpose(x, 256, (3, 3), strides=(2, 2), padding="SAME", name="c2t2",
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
-    
+
     x = tf.layers.conv2d_transpose(x, 128, (3, 3), strides=(2, 2), padding="SAME", name="c2t3",
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
@@ -101,11 +101,11 @@ def discriminator(inp, num_classes):
                              kernel_initializer=init_kernel,
                              bias_initializer=init_bias)
 
-        y1 = tf.layers.dense(y1, 1, activation=tf.sigmoid, name='discriminator')
-        y1 = tf.squeeze(y1, 1)
+        y1 = tf.layers.dense(y1, 1, activation=tf.sigmoid, name="fc6")
+        y1 = tf.squeeze(y1, 1, name='output_node_dis')
 
     with tf.name_scope('classifier'):
-        y2 = tf.layers.dense(x, num_classes, activation=tf.sigmoid, name='classifier')
+        y2 = tf.layers.dense(x, num_classes, activation=tf.sigmoid, name='output_node_cls')
 
     # Return (discriminator, classifier)
     return (y1, y2)
