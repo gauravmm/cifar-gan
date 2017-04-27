@@ -17,6 +17,7 @@ labelled_fraction = 0.10
 # As described in appendix A of DeepMind's AC-GAN paper
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.00005)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 #optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
 batch_size   = 128
 
@@ -34,9 +35,10 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 # To disable label smoothing noise, just replace it with:
 #   lambda is_real, sz: 0
 
-# The relative weight assigned to the discriminator and classifier when training.
-loss_weights_fake = {'discriminator': 1.0, 'classifier': 1.0}
-loss_weights_real = {'discriminator': 1.0, 'classifier': 1.0}
+# The relative weight assigned to the discriminator and classifier nodes when training the generator network
+# and the classifier network respectively.
+loss_weights_generator = {'discriminator': 1.0, 'classifier': 1.0}
+loss_weights_classifier = {'discriminator': 1.0, 'classifier': 1.0}
 
 class HaltRelativeCorrectness(object):
     def __init__(self):

@@ -336,7 +336,7 @@ def argparser():
         type=dynLoadModule("preprocessor"),
         help='the name of files with image preprocessing instructions in the preprocessor package; applied in left-to-right order')
     parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
-        help="the number of batches between reporting results and saving weights")
+        help="the interval, in seconds, at which weights are saved")
     parser.add_argument('--image-columns', default=1, type=int,
         help="the number of columns to group produced images into")        
     parser.add_argument('--resume', action='store_const', const=True, default=False,

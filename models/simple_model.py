@@ -71,7 +71,6 @@ def discriminator(inp, num_classes):
 
     x = inp
 
-    print(x.get_shape())
     x = tf.layers.dense(x, 64, name='fc1',
                         kernel_initializer=init_kernel,
                         bias_initializer=init_bias)
