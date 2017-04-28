@@ -38,7 +38,7 @@ label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 # The relative weight assigned to the discriminator and classifier nodes when training the generator network
 # and the classifier network respectively.
 loss_weights_generator = {'discriminator': 1.0, 'classifier': 1.0}
-loss_weights_classifier = {'discriminator': 1.0, 'classifier': 1.0}
+loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
@@ -99,6 +99,6 @@ class HaltRelativeLoss(object):
         return step >= self.curr_gen_ratio * self.dis_steps
 
 _halting = HaltRelativeCorrectness()
-discriminator_halt = _halting.discriminator_halt
-generator_halt     = _halting.generator_halt
+discriminator_halt = lambda b, s, l: s >= 1
+generator_halt     = lambda b, s, l: s >= 5
 classifier_halt    = lambda b, s, l: s >= 1

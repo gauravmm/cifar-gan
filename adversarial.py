@@ -112,13 +112,19 @@ def train(args):
                 str(dis_output_fake_cls.get_shape())))
             return
 
-    with tf.name_scope('loss'):
+    with tf.name_scope('metrics'):
         # Discriminator losses
         with tf.name_scope('dis_fake'):
-            dis_loss_fake = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label_fake))
+            with tf.name_scope('loss'):
+                dis_loss_fake = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label_fake))
+            with tf.name_scope('true_neg'):
+                train_dis_fake_true_neg = tf.reduce_mean(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32))
         with tf.name_scope('dis_real'):
-            dis_loss_real = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label_real))
-
+            with tf.name_scope('loss'):
+                dis_loss_real = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label_real))
+            with tf.name_scope('true_pos'):
+                train_dis_real_true_pos = tf.reduce_mean(tf.cast(tf.less(dis_output_real_dis, 0.5), tf.int32))
+                
         # Classifier loss
         with tf.name_scope('cls'):
             with tf.name_scope('dis'):
@@ -127,6 +133,9 @@ def train(args):
                 cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_class, logits=dis_output_real_cls))
             cls_loss = args.hyperparam.loss_weights_classifier["discriminator"] * cls_loss_dis \
                     + args.hyperparam.loss_weights_classifier["classifier"]    * cls_loss_cls
+            
+            with tf.name_scope('acc'):
+                cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(dis_class, axis=1), tf.argmax(dis_output_real_cls, axis=1)), tf.int32))
 
         # Generator loss
         with tf.name_scope('gen'):
@@ -136,6 +145,10 @@ def train(args):
                 gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_input_class, logits=dis_output_fake_cls))
             gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
                      + args.hyperparam.loss_weights_generator["classifier"]    * gen_loss_cls
+            
+            with tf.name_scope("fooling_rate"):
+                gen_fooling = tf.reduce_mean(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32))
+
 
         logger.info("Model constructed.")
 
@@ -173,15 +186,15 @@ def train(args):
     assert support.Y_REAL == 0 and support.Y_FAKE == 1
 
     with tf.name_scope('summary_discriminator'):
-        tf.summary.scalar('fake/loss', dis_loss_fake)
-        with tf.name_scope('true_neg'):
-            train_dis_fake_true_neg = tf.reduce_mean(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32))
-        tf.summary.scalar('fake/true_neg', train_dis_fake_true_neg)
+        with tf.name_scope('fake'):
+            tf.summary.scalar('loss', dis_loss_fake)
+            tf.summary.scalar('true_neg', train_dis_fake_true_neg)
+            tf.summary.histogram('dis', dis_output_fake_dis)
 
-        tf.summary.scalar('real/loss', dis_loss_real)
-        with tf.name_scope('true_pos'):
-            train_dis_real_true_pos = tf.reduce_mean(tf.cast(tf.less(dis_output_real_dis, 0.5), tf.int32))
-        tf.summary.scalar('real/true_pos', train_dis_real_true_pos)
+        with tf.name_scope('real'):
+            tf.summary.scalar('loss', dis_loss_real)
+            tf.summary.scalar('true_pos', train_dis_real_true_pos)
+            tf.summary.histogram('dis', dis_output_real_dis)
 
         tf.summary.scalar('iterations', log_step_dis)
         
@@ -189,19 +202,15 @@ def train(args):
         tf.summary.scalar('loss/cls', cls_loss_cls)
         tf.summary.scalar('loss/dis', cls_loss_dis)
         tf.summary.scalar('loss', cls_loss)
-        with tf.name_scope('acc'):
-            cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(dis_class, axis=1), tf.argmax(dis_output_real_cls, axis=1)), tf.int32))
         tf.summary.scalar('accuracy', cls_accuracy)
         
         tf.summary.scalar('iterations', log_step_cls)
 
     with tf.name_scope('summary_generator'):
-        tf.summary.image('output', data.unapply(gen_output), max_outputs=8)
+        tf.summary.image('output', data.unapply(gen_output), max_outputs=32)
         tf.summary.scalar('loss/cls', gen_loss_cls)
         tf.summary.scalar('loss/dis', gen_loss_dis)
         tf.summary.scalar('loss', gen_loss)
-        with tf.name_scope("fooling_rate"):
-            gen_fooling = tf.reduce_mean(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32))
         tf.summary.scalar('fooling_rate', gen_fooling)
         
         tf.summary.scalar('iterations', log_step_gen)
