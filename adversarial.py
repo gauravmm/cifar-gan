@@ -72,7 +72,7 @@ def train(args):
     # Build Model
     #
     
-    global_step = tf.Variable(0, name='global_step', trainable=False, dtype=tf.int32)
+    global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
     gen_input_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
@@ -156,15 +156,15 @@ def train(args):
                             minimize(gen_loss, var_list=generator_variables)
 
     with tf.name_scope('step_count'):
-        log_step_dis = tf.Variable(0, trainable=False)
+        log_step_dis = tf.Variable(initial_value=0, dtype=tf.int32, trainable=False)
         log_step_dis_zero = tf.assign(log_step_dis, 0)
         log_step_dis_succ = tf.assign_add(log_step_dis, 1)
         
-        log_step_cls = tf.Variable(0, trainable=False)
+        log_step_cls = tf.Variable(initial_value=0, dtype=tf.int32, trainable=False)
         log_step_cls_zero = tf.assign(log_step_cls, 0)
         log_step_cls_succ = tf.assign_add(log_step_cls, 1)
 
-        log_step_gen = tf.Variable(0, trainable=False)
+        log_step_gen = tf.Variable(initial_value=0, dtype=tf.int32, trainable=False)
         log_step_gen_zero = tf.assign(log_step_gen, 0)
         log_step_gen_succ = tf.assign_add(log_step_gen, 1)
 
@@ -234,7 +234,8 @@ def train(args):
                     dis_label: next(data.label_dis_real)
                 })
                 
-                step_dis = sess.run([log_step_dis_succ])
+
+                step_dis = sess.run(log_step_dis_succ)
                 if args.hyperparam.discriminator_halt(batch, step_dis, 
                     {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
                      "real_loss": loss_real, "real_true_pos": real_true_pos}):

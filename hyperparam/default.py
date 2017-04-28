@@ -101,4 +101,4 @@ class HaltRelativeLoss(object):
 _halting = HaltRelativeCorrectness()
 discriminator_halt = _halting.discriminator_halt
 generator_halt     = _halting.generator_halt
-classifier_halt    = lambda b, s: s >= 1
+classifier_halt    = lambda b, s, l: s >= 1
