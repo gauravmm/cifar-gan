@@ -49,7 +49,7 @@ class HaltRelativeCorrectness(object):
         self.min_step_gen = 4
         self.max_step_gen = 12
 
-    def discriminator_halt(self, batch, step, loss_fake, loss_real):
+    def discriminator_halt(self, batch, step, loss):
         # Batch refers to the number of times the discriminator, then generator would be training.
         # Step is the number of times the discriminator has been run within that batch
         # Loss metric the loss in the previous iteration, as a key:value dict.
@@ -57,7 +57,7 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_dis:
             return True
-        if (loss_fake["discriminator_label_fake"] + loss_real["discriminator_label_real"])/2 < self.discriminator_correct:
+        if (loss["real_true_pos"] + loss["fake_true_neg"])/2 < self.discriminator_correct:
             return True
         #if (loss_fake["loss"] + loss_real["loss"])/2 < self.discriminator_loss:
         #    return True
@@ -68,7 +68,7 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_gen:
             return True
-        if loss["discriminator_label_real"] < self.generator_correct:
+        if loss["gen_fooling"] < self.generator_correct:
             return True
         #if loss["loss"] < self.generator_loss:
         #    return True

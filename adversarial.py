@@ -72,7 +72,7 @@ def train(args):
     # Build Model
     #
     
-    global_step = tf.Variable(0, name='global_step', trainable=False)
+    global_step = tf.Variable(0, name='global_step', trainable=False, dtype=tf.int32)
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
     gen_input_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
@@ -121,9 +121,9 @@ def train(args):
         # Classifier loss
         with tf.name_scope('cls'):
             with tf.name_scope('dis'):
-                cls_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_fake_dis - dis_label))
+                cls_loss_dis  = tf.reduce_mean(tf.nn.l2_loss(dis_output_real_dis - dis_label))
             with tf.name_scope('cls'):
-                cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_label, logits=dis_output_real_cls))
+                cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_class, logits=dis_output_real_cls))
             cls_loss = args.hyperparam.loss_weights_classifier["discriminator"] * cls_loss_dis \
                     + args.hyperparam.loss_weights_classifier["classifier"]    * cls_loss_cls
 
@@ -151,7 +151,7 @@ def train(args):
         train_dis_real = args.hyperparam.optimizer_dis. \
                             minimize(dis_loss_real, var_list=discriminator_variables)
         train_cls = args.hyperparam.optimizer_cls. \
-                            minimize(gen_loss, var_list=discriminator_variables)
+                            minimize(cls_loss, var_list=discriminator_variables)
         train_gen = args.hyperparam.optimizer_gen. \
                             minimize(gen_loss, var_list=generator_variables)
 
@@ -160,30 +160,41 @@ def train(args):
     with tf.name_scope('summary'):
         with tf.name_scope('discriminator'):
             tf.summary.scalar('fake/loss', dis_loss_fake)
-            train_dis_fake_true_neg = tf.reduce_sum(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32))
+            with tf.name_scope('true_neg'):
+                train_dis_fake_true_neg = tf.reduce_mean(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32))
             tf.summary.scalar('fake/true_neg', train_dis_fake_true_neg)
 
             tf.summary.scalar('real/loss', dis_loss_real)
-            train_dis_real_true_pos = tf.reduce_sum(tf.cast(tf.less(dis_output_real_dis, 0.5), tf.int32))
+            with tf.name_scope('true_pos'):
+                train_dis_real_true_pos = tf.reduce_mean(tf.cast(tf.less(dis_output_real_dis, 0.5), tf.int32))
             tf.summary.scalar('real/true_pos', train_dis_real_true_pos)
+
+            log_step_dis = tf.Variable(0, trainable=False)
+            tf.summary.scalar('iterations', log_step_dis)
             
         with tf.name_scope('classifier'):
-            tf.summary.scalar('true_pos', tf.reduce_sum(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32)))
-    
+            tf.summary.scalar('loss/cls', cls_loss_cls)
+            tf.summary.scalar('loss/dis', cls_loss_dis)
+            tf.summary.scalar('loss', cls_loss)
+            with tf.name_scope('acc'):
+                cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(dis_class, axis=1), tf.argmax(dis_output_real_cls, axis=1)), tf.int32))
+            tf.summary.scalar('accuracy', cls_accuracy)
+            
+            log_step_cls = tf.Variable(0, trainable=False)
+            tf.summary.scalar('iterations', log_step_cls)
+
         with tf.name_scope('generator'):
             tf.summary.image('output', data.unapply(gen_output), max_outputs=8)
             tf.summary.scalar('loss', gen_loss)
-            tf.summary.scalar('fooling_rate', tf.reduce_sum(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32)))
-
-        with tf.name_scope('iterations'):
-            # Create placeholder variables
-            log_step_dis = tf.Variable(0, trainable=False)
-            log_step_cls = tf.Variable(0, trainable=False)
+            with tf.name_scope("fooling_rate"):
+                gen_fooling = tf.reduce_sum(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32))
+            tf.summary.scalar('fooling_rate', gen_fooling)
+            
             log_step_gen = tf.Variable(0, trainable=False)
+            tf.summary.scalar('iterations', log_step_gen)
 
-            tf.summary.scalar('discriminator', log_step_dis)
-            tf.summary.scalar('classifier', log_step_cls)
-            tf.summary.scalar('generator', log_step_gen)
+
+    increment_global_step = tf.assign_add(global_step, 1, name="increment_global_step")
 
     sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
     with sv.managed_session() as sess:
@@ -209,8 +220,8 @@ def train(args):
                 })
                 
                 # Use real images (but not labels), and train the model to predict them as real.
-                loss_real, real_true_pos = sess.run([train_dis_real, train_dis_real_true_pos], feed_dict={
-                    dis_input: next(data.unlabelled),
+                _, loss_real, real_true_pos = sess.run([train_dis_real, dis_loss_real, train_dis_real_true_pos], feed_dict={
+                    dis_input: next(data.unlabelled)[0],
                     dis_label: next(data.label_dis_real)
                 })
                 
@@ -226,33 +237,38 @@ def train(args):
             step_cls = 0
             while True:
                 data_x, data_y = next(data.labelled)
-                loss_label = dis_model_labelled.train_on_batch(data_x, [ next(data.label_dis_real), data_y ])
+                _, loss_label, accuracy = sess.run([train_cls, cls_loss, cls_accuracy], feed_dict={
+                    dis_input: data_x,
+                    dis_class: data_y,
+                    dis_label: next(data.label_dis_real)
+                })
+                
                 step_cls += 1
-                if args.hyperparam.classifier_halt(batch, step_cls):
+                if args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
                     break
+            sess.run(tf.assign(log_step_cls, step_cls))
 
-
-            # Second, we train the generator for `step_gen` number of steps. Because the .trainable flag (for `dis_model`) 
-            # was False when `com_model` was compiled, the discriminator weights are not updated. The generator weights are
-            # the only weights updated in this step.
-            # In this step, we train "generator" so that "discriminatsor(generator(random)) == real". Specifically, we compose
-            # `dis_model` onto `gen_model`, and train the combined model so that given a random vector, it classifies images
-            # as real.
+            # Second, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
+            # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
+            # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
+            # vector, it classifies images as real.
             step_com = 0
             while True:
-                fake_class = next(data.rand_label_vec)
-                loss = com_model.train_on_batch(
-                    [ next(data.rand_vec), fake_class ],
-                    [ next(data.label_gen_real), fake_class ])
+                _, loss, fooling_rate = sess.run([train_gen, gen_loss, gen_fooling], feed_dict={
+                    gen_input_seed: next(data.rand_vec),
+                    gen_input_class: next(data.rand_label_vec),
+                    dis_label: next(data.label_dis_real) # Note that 
+                })
                 
                 step_com += 1
-                if args.hyperparam.generator_halt(batch, step_com, loss):
+                if args.hyperparam.generator_halt(batch, step_com, {"gen_loss": loss, "gen_fooling": fooling_rate}):
                     break
+            sess.run(tf.assign(log_step_gen, step_com))
 
             #
             # That is the entire training algorithm.
             #
-            sess.run(tf.assign_add(global_step, 1))
+            sess.run(increment_global_step)
 
 
 #
