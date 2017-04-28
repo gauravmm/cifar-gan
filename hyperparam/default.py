@@ -19,7 +19,7 @@ optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 #optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
-batch_size   = 128
+batch_size   = 64
 
 # This specifies the probability of a label being flipped, which allows the true and fake distributions to overlap
 # to allow the GAN to discover this. There's an argument that (1) the space of good solutions is large and flat (i.e. 
