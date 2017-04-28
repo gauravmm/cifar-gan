@@ -201,7 +201,7 @@ def train(args):
         tf.summary.scalar('loss/dis', gen_loss_dis)
         tf.summary.scalar('loss', gen_loss)
         with tf.name_scope("fooling_rate"):
-            gen_fooling = tf.reduce_sum(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32))
+            gen_fooling = tf.reduce_mean(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32))
         tf.summary.scalar('fooling_rate', gen_fooling)
         
         tf.summary.scalar('iterations', log_step_gen)
