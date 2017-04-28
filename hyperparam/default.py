@@ -15,9 +15,9 @@ NUM_CLASSES = 10
 labelled_fraction = 0.10
 
 # As described in appendix A of DeepMind's AC-GAN paper
-optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.00005)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.00005)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.00005)
+optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
 #optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
 batch_size   = 64
 
@@ -100,5 +100,5 @@ class HaltRelativeLoss(object):
 
 _halting = HaltRelativeCorrectness()
 discriminator_halt = lambda b, s, l: s >= 1
-generator_halt     = lambda b, s, l: s >= 5
+generator_halt     = lambda b, s, l: s >= 6
 classifier_halt    = lambda b, s, l: s >= 1
