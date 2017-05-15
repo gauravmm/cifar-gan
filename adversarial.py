@@ -32,11 +32,11 @@ np.random.seed(54183)
 
 # Logging
 logging.getLogger("tensorflow").setLevel(logging.WARNING)
-logging.basicConfig(filename=config.PATH['log'], level=logging.DEBUG, format='[%(asctime)s, %(levelname)s] %(message)s')
+logging.basicConfig(filename=config.PATH['log'], level=logging.DEBUG, format='[%(asctime)s, %(levelname)s @%(name)s] %(message)s')
 # Logger
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
-console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s] %(message)s', datefmt='%H:%M:%S'))
+console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s @%(name)s] %(message)s', datefmt='%H:%M:%S'))
 logging.getLogger().addHandler(console)
 logger = logging.getLogger()
 
@@ -111,7 +111,7 @@ def main(args):
         if batch:
             logger.info("Successfully loaded batch {}".format(batch))
         else:
-            logger.warn("Could not load latest checkpoint for testing. Exiting...")
+            logger.error("Could not load latest checkpoint for testing. Exiting...")
             return
     elif args.resume:
         logger.info("Attempting to resume from saved checkpoints.")
@@ -168,9 +168,13 @@ def save_sample_images(args, data, batch, gen_model):
 #
 
 def test(args, metrics_names, models):
+    logger = logging.getLogger("test")
+
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
     VERIFY_METRIC = True
-
+    if VERIFY_METRIC:
+        logger.warn("VERIFY_METRIC is True; computation will take longer.")
+    
     metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
     data = support.TestData(args, "test")
 
@@ -205,6 +209,8 @@ def test(args, metrics_names, models):
 
 
 def train(args, metrics_names, models):
+    logger = logging.getLogger("train")
+
     dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
     global batch
 

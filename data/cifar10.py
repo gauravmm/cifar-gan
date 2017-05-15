@@ -1,18 +1,20 @@
 # CIFAR10 Downloader
 
-from keras.datasets import cifar10
-import numpy as np
+import logging
 import math
 
+import numpy as np
+
+from keras.datasets import cifar10
+
+logger = logging.getLogger(__name__)
+
+_shuffle = False
+_data_frac = 1.0
 def gen(d, batch_size, wrap=True):
     x, y = d
     NUM_CLASS = 10
-
-    # Randomize the order
-    p = np.random.permutation(x.shape[0])
-    x = x[p,...]
-    y = y[p,...]
-    
+   
     def _to_1hot(lbl):
         z = np.zeros(shape=(batch_size, NUM_CLASS))
         z[np.arange(batch_size), lbl.flatten()] = 1
@@ -40,6 +42,20 @@ def gen(d, batch_size, wrap=True):
             j = i + batch_size
             yield (x[i:j,...], _to_1hot(y[i:j,...]))
             i = j
+
+def configure(props):
+    if "shuffle" in props:
+        _shuffle = True
+        logger.info("Shuffling.")
+
+    if "frac" in props:
+        f = float(props["frac"])
+        if f > 1.0:
+            raise RuntimeError("Data fraction must be <= 1.0")
+        if f <= 0.0:
+            raise RuntimeError("Data fraction must be > 0.0")
+        _data_frac = f
+        logger.info("Training set fraction is {}".format(_data_frac))
 
 def get_data(split, batch_size, labelled_fraction=1.0):
     """The provider function in a dataset.
@@ -75,6 +91,21 @@ def get_data(split, batch_size, labelled_fraction=1.0):
     # (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     train, test = cifar10.load_data()
     # Shuffle the training data
+    if _shuffle:
+        x, y = train
+        p = np.random.permutation(x.shape[0])
+        x = x[p,...]
+        y = y[p,...]
+        train = (x, y)
+
+    # Restrict the number of training examples
+    if _data_frac < 1.0:
+        x, y = train
+        n = x.shape[0] * _data_frac
+        x = x[:n,...]
+        y = y[:n,...]
+        train = (x, y)
+
     num_lbl = math.floor(train[0].shape[0] * labelled_fraction)
 
     if split == "train":
