@@ -23,5 +23,4 @@ def unapply(inp):
     Inverts the transformation to input, using TensorFlow. This is used to display generated images.
     You may not create or remove elements from the batch.
     """
-    inp = (inp + 1.0) * 127.5
-    return tf.cast(inp, tf.uint8)
+    return (inp + 1.0) / 2
