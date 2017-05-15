@@ -57,11 +57,13 @@ class Preprocessor(object):
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
         
-        self.apply_train = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.apply_train for p in args.preprocessor], lambda x: x)
+        applyfunc = lambda h: functools.reduce(lambda f, g: lambda x: g(f(x)), [h(p) for p in args.preprocessor], lambda x: x)
+        self.apply_train = applyfunc(lambda p: p.apply_train)
+        self.apply_test = applyfunc(lambda p: p.apply_test)
 
-        self.apply_test = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.apply_test for p in args.preprocessor], lambda x: x)
-
-        logger.info("Applied preprocessors: {}.".format(", ".join(namep)))
+        logger.info("Applied preprocessors: {}.".format(
+                        " -> ".join([x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__
+                            for x in args.preprocessor])))
 
 
 class TrainData(object):
@@ -71,8 +73,8 @@ class TrainData(object):
         unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
         logger.info("Training data loaded from disk.")
 
-        unlabelled = preproc.apply_train(unlabelled)
-        labelled = preproc.apply_train(labelled)
+        unlabelled = map(preproc.apply_train, unlabelled)
+        labelled = map(preproc.apply_train, labelled)
         logger.info("Applied training preprocessor.")
 
         self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
@@ -100,7 +102,7 @@ class TestData(object):
         num, labelled = args.data.get_data("test", args.hyperparam.batch_size)
         logger.info("Training data loaded from disk.")
 
-        self.labelled = preproc.apply_test(labelled)
+        self.labelled = map(preproc.apply_test, labelled)
         logger.info("Applied test preprocessor.")
         
         self.num_labelled = num
@@ -223,7 +225,6 @@ def _selection_stream(probs, *args):
         # into an actual value.
         yield np.choose(np.random.choice(len(ch), size=ch[0].shape, p=probs), ch)
 
-preproc_names = lambda args: [x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__ for x in args.preprocessor]
 
 #
 # Image handling
