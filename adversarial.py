@@ -54,18 +54,11 @@ def main(args):
     logger.info("Loaded hyperparameters: {}".format(args.hyperparam.__file__))
     logger.info("Loaded preprocessors  : {}".format(", ".join(a.__file__ for a in args.preprocessor)))
     
-    if args.split == "train":
-        train(args)
-    elif args.split == "test":
-        sv = tf.train.Supervisor(logdir=config.get_filename(args), global_step=global_step, saver=None)
-        with sv.managed_session() as sess:
-            test(args, (gen_input_seed, gen_label_input, gen_output, dis_input, dis_output_real_dis, dis_output_real_cls,
-                        dis_output_fake_dis, dis_output_fake_cls))
-    else:
-        assert not "This state should not be reachable; the argparser should catch this case."
+    run(args)
+
 
 _shape_str = lambda a: "(" + ", ".join("?" if b is None else str(b) for b in a) + ")"
-def train(args):
+def run(args):
     logger = logging.getLogger("train")
 
     #
@@ -152,7 +145,8 @@ def train(args):
 
         logger.info("Model constructed.")
 
-    data = support.TrainData(args)
+    # Preprocessor
+    preproc = support.Preprocessor(args)
 
     variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
     discriminator_variables = [v for v in variables if 'model_discriminator/' in v.name]
@@ -206,7 +200,7 @@ def train(args):
         tf.summary.histogram('label_predicted', tf.argmax(dis_output_real_cls, 1))
 
     with tf.name_scope('summary_generator'):
-        tf.summary.image('output', data.unapply(gen_output), max_outputs=32)
+        tf.summary.image('output', preproc.unapply(gen_output), max_outputs=32)
         tf.summary.scalar('loss/cls', gen_loss_cls)
         tf.summary.scalar('loss/dis', gen_loss_dis)
         tf.summary.scalar('loss', gen_loss)
@@ -226,127 +220,129 @@ def train(args):
 
     increment_global_step = tf.assign_add(global_step, 1, name="increment_global_step")
 
-    sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
-    with sv.managed_session() as sess:
-        # Set up tensorboard logging:
-        logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
+    #
+    # Training
+    #
+    if args.split == "train":
+        logger = logging.getLogger("train")
+        data = support.TrainData(args, preproc)
 
-        batch = sess.run(global_step)
-        logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
-        logger.info("Starting training from batch {}. Saving model every {}s.".format(batch, args.log_interval))
+        sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
+        with sv.managed_session() as sess:
+            # Set up tensorboard logging:
+            logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
 
-        # Format the score printing
-        while not sv.should_stop():
-            logger.debug('Step {} of {}.'.format(batch, args.batches))
+            batch = sess.run(global_step)
+            logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
+            logger.info("Starting training from batch {}. Saving model every {}s.".format(batch, args.log_interval))
 
-            # This training proceeds in two phases: (1) discriminator, then (2) generator.
-            # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
-            # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
-            # distinguish between "fake"" (generated) and real images by running it on one step of each.
-            
-            step_dis = 0
-            while True:
-                # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
-                # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
-                # same time so we can capture the summary op.
-                (_, loss_fake, fake_true_neg,), (_, loss_real, real_true_pos), summ_dis = sess.run(
-                    ((train_dis_fake, dis_loss_fake, train_dis_fake_true_neg),
-                     (train_dis_real, dis_loss_real, train_dis_real_true_pos), summary_dis), feed_dict={
-                    gen_input_seed: next(data.rand_vec),
-                    gen_input_class: next(data.rand_label_vec),
-                    dis_label_fake: next(data.label_dis_fake),
-                    dis_input: next(data.unlabelled)[0],
-                    dis_label_real: next(data.label_dis_real)
-                })
-                step_dis += 1
-                logwriter.add_summary(summ_dis, global_step=batch)
+            # Format the score printing
+            while not sv.should_stop():
+                logger.debug('Step {} of {}.'.format(batch, args.batches))
 
-                if args.hyperparam.discriminator_halt(batch, step_dis, 
-                    {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
-                     "real_loss": loss_real, "real_true_pos": real_true_pos}):
-                    break
-            
-            # Train classifier
-            step_cls = 0
-            while True:
-                data_x, data_y = next(data.labelled)
-                _, loss_label, accuracy, summ_cls = sess.run(
-                    [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
-                    dis_input: data_x,
-                    dis_class: data_y,
-                    dis_label_real: next(data.label_dis_real)
-                })
-                step_cls += 1
-                logwriter.add_summary(summ_cls, global_step=batch)
+                # This training proceeds in two phases: (1) discriminator, then (2) generator.
+                # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
+                # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
+                # distinguish between "fake"" (generated) and real images by running it on one step of each.
                 
-                if args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
-                    break
-            
+                step_dis = 0
+                while True:
+                    # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
+                    # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
+                    # same time so we can capture the summary op.
+                    (_, loss_fake, fake_true_neg,), (_, loss_real, real_true_pos), summ_dis = sess.run(
+                        ((train_dis_fake, dis_loss_fake, train_dis_fake_true_neg),
+                        (train_dis_real, dis_loss_real, train_dis_real_true_pos), summary_dis), feed_dict={
+                        gen_input_seed: next(data.rand_vec),
+                        gen_input_class: next(data.rand_label_vec),
+                        dis_label_fake: next(data.label_dis_fake),
+                        dis_input: next(data.unlabelled)[0],
+                        dis_label_real: next(data.label_dis_real)
+                    })
+                    step_dis += 1
+                    logwriter.add_summary(summ_dis, global_step=batch)
 
-            # Second, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
-            # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
-            # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
-            # vector, it classifies images as real.
-            step_gen = 0
-            while True:
-                _, loss, fooling_rate, summ_gen = sess.run(
-                    [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
-                    gen_input_seed: next(data.rand_vec),
-                    gen_input_class: next(data.rand_label_vec),
-                    dis_label_real: next(data.label_gen_real)
-                })
-                step_gen += 1
-                logwriter.add_summary(summ_gen, global_step=batch)
+                    if args.hyperparam.discriminator_halt(batch, step_dis, 
+                        {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
+                        "real_loss": loss_real, "real_true_pos": real_true_pos}):
+                        break
                 
-                if args.hyperparam.generator_halt(batch, step_gen, {"gen_loss": loss, "gen_fooling": fooling_rate}):
-                    break
+                # Train classifier
+                step_cls = 0
+                while True:
+                    data_x, data_y = next(data.labelled)
+                    _, loss_label, accuracy, summ_cls = sess.run(
+                        [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
+                        dis_input: data_x,
+                        dis_class: data_y,
+                        dis_label_real: next(data.label_dis_real)
+                    })
+                    step_cls += 1
+                    logwriter.add_summary(summ_cls, global_step=batch)
+                    
+                    if args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
+                        break
+                
 
-            #
-            # That is the entire training algorithm.
-            #
-            batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen})
-            logwriter.add_summary(summ_bal, global_step=batch)
+                # Second, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
+                # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
+                # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
+                # vector, it classifies images as real.
+                step_gen = 0
+                while True:
+                    _, loss, fooling_rate, summ_gen = sess.run(
+                        [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
+                        gen_input_seed: next(data.rand_vec),
+                        gen_input_class: next(data.rand_label_vec),
+                        dis_label_real: next(data.label_gen_real)
+                    })
+                    step_gen += 1
+                    logwriter.add_summary(summ_gen, global_step=batch)
+                    
+                    if args.hyperparam.generator_halt(batch, step_gen, {"gen_loss": loss, "gen_fooling": fooling_rate}):
+                        break
 
+                #
+                # That is the entire training algorithm.
+                #
+                batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen})
+                logwriter.add_summary(summ_bal, global_step=batch)
 
-def test(args, metrics_names, models):
-    logger = logging.getLogger("test")
+    #
+    # Testing
+    #
+    elif args.split == "test":
+        logger = logging.getLogger("test")
+        data = support.TestData(args, preproc)
+        
+        logger.info("Starting tests.")
+        metrics = np.zeros(shape=len(metrics_names))
+        i = 0
+        q = 0.0
+        k = None
+        for batch, d in enumerate(data.labelled):
+            data_x, data_y = d
+            m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
+            metrics += m
+            i += 1
+            if VERIFY_METRIC:
+                v = dis_model_labelled.predict(data_x)[1]
+                q += np.sum(np.argmax(v, axis=1) == np.argmax(data_y, axis=1))/v.shape[0]
+                if k is None:
+                    k = np.zeros((v.shape[1], v.shape[1]))
+                for (x, y) in zip(np.argmax(data_y, axis=1), np.argmax(v, axis=1)):
+                    k[x, y] += 1.0/v.shape[0]
 
-    dis_model_unlabelled, dis_model_labelled, gen_model, com_model = models
-    VERIFY_METRIC = True
-    if VERIFY_METRIC:
-        logger.warn("VERIFY_METRIC is True; computation will take longer.")
-    
-    metric_wrap = lambda x: {k:v for k, v in zip(metrics_names, x)}
-    data = support.TestData(args, "test")
-
-    logger.info("Starting tests.")
-    metrics = np.zeros(shape=len(metrics_names))
-    i = 0
-    q = 0.0
-    k = None
-    for batch, d in enumerate(data.labelled):
-        data_x, data_y = d
-        m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
-        metrics += m
-        i += 1
+        metrics /= i
+        m = metric_wrap(metrics)
+        logger.debug(m)
+        logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
         if VERIFY_METRIC:
-            v = dis_model_labelled.predict(data_x)[1]
-            q += np.sum(np.argmax(v, axis=1) == np.argmax(data_y, axis=1))/v.shape[0]
-            if k is None:
-                k = np.zeros((v.shape[1], v.shape[1]))
-            for (x, y) in zip(np.argmax(data_y, axis=1), np.argmax(v, axis=1)):
-                k[x, y] += 1.0/v.shape[0]
-
-    metrics /= i
-    m = metric_wrap(metrics)
-    logger.debug(m)
-    logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
-    if VERIFY_METRIC:
-        logger.info("Classifier Accuracy (compare): {:.1f}%".format(q/i*100))
-        k = k/i
-        k = k/np.sum(k, axis=0)*100.0
-        logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
-    logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
+            logger.info("Classifier Accuracy (compare): {:.1f}%".format(q/i*100))
+            k = k/i
+            k = k/np.sum(k, axis=0)*100.0
+            logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
+        logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
 
 
 if __name__ == '__main__':

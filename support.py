@@ -51,20 +51,29 @@ class MovingAverage(object):
 Y_REAL = 0
 Y_FAKE = 1
 
-class TrainData(object):
+class Preprocessor(object):
     def __init__(self, args):
+        # Assemble the preprocessor:
+        # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
+        self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
+        
+        self.apply_train = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.apply_train for p in args.preprocessor], lambda x: x)
+
+        self.apply_test = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.apply_test for p in args.preprocessor], lambda x: x)
+
+        logger.info("Applied preprocessors: {}.".format(", ".join(namep)))
+
+
+class TrainData(object):
+    def __init__(self, args, preproc):
         logger = logging.getLogger("traindata")
 
         unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
         logger.info("Training data loaded from disk.")
 
-        # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
-        self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
-        for p, namep in zip(args.preprocessor, preproc_names(args)):
-            unlabelled = itertools.starmap(p.apply_train, unlabelled)
-            labelled   = itertools.starmap(p.apply_train, labelled)
-            logger.info("Applied train preprocessor {}.".format(namep))
-
+        unlabelled = preproc.apply_train(unlabelled)
+        labelled = preproc.apply_train(labelled)
+        logger.info("Applied training preprocessor.")
 
         self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
         self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
@@ -87,17 +96,13 @@ class TrainData(object):
         self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
 class TestData(object):
-    def __init__(self, args, split):
-        assert split == "test" or split == "develop"
-        
-        num, labelled = args.data.get_data(split, args.hyperparam.batch_size)
+    def __init__(self, args, preproc):
+        num, labelled = args.data.get_data("test", args.hyperparam.batch_size)
         logger.info("Training data loaded from disk.")
 
-        for p, np in zip(args.preprocessor, preproc_names(args)):
-            labelled   = itertools.starmap(p.apply_test, labelled)
-            logger.info("Applied test preprocessor {}.".format(np))
-
-        self.labelled = labelled
+        self.labelled = preproc.apply_test(labelled)
+        logger.info("Applied test preprocessor.")
+        
         self.num_labelled = num
         self.label_dis_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
 
