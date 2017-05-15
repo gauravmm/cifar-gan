@@ -16,4 +16,4 @@ colorize python3 adversarial.py  \
     --log-interval 600           \
     --batches 2500               \
     --image-columns 4            \
-    train
+    test

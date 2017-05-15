@@ -16,11 +16,11 @@ import sys
 import time
 
 import numpy as np
-import png
-import tensorflow as tf
 
 import config
 import support
+import tensorflow as tf
+import tqdm
 
 #
 # Init
@@ -316,33 +316,32 @@ def run(args):
         data = support.TestData(args, preproc)
         
         logger.info("Starting tests.")
-        metrics = np.zeros(shape=len(metrics_names))
+        
         i = 0
-        q = 0.0
-        k = None
-        for batch, d in enumerate(data.labelled):
-            data_x, data_y = d
-            m = dis_model_labelled.test_on_batch(data_x, [next(data.label_dis_real), data_y])
-            metrics += m
-            i += 1
-            if VERIFY_METRIC:
-                v = dis_model_labelled.predict(data_x)[1]
-                q += np.sum(np.argmax(v, axis=1) == np.argmax(data_y, axis=1))/v.shape[0]
-                if k is None:
-                    k = np.zeros((v.shape[1], v.shape[1]))
-                for (x, y) in zip(np.argmax(data_y, axis=1), np.argmax(v, axis=1)):
-                    k[x, y] += 1.0/v.shape[0]
+        acc = 0.0
+        k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
-        metrics /= i
-        m = metric_wrap(metrics)
-        logger.debug(m)
-        logger.info("Classifier Accuracy: {:.1f}%".format(m['classifier_acc']*100))
-        if VERIFY_METRIC:
-            logger.info("Classifier Accuracy (compare): {:.1f}%".format(q/i*100))
-            k = k/i
-            k = k/np.sum(k, axis=0)*100.0
-            logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
-        logger.info("Discriminator Recall: {:.1f}%".format(m['discriminator_label_real']*100))
+        with tf.Session() as sess:
+            # Load weights
+            for _, d in zip(tqdm.trange(0, data.num_labelled, args.hyperparam.batch_size), data.labelled):
+                data_x, data_y = d
+                
+                v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x})
+                # Update the current accuracy score
+                
+                i += v.shape[0]
+                vp = np.argmax(v, axis=1)
+                vq = np.argmax(data_y, axis=1)
+
+                acc += np.sum(vp == vq)
+                for (x, y) in zip(vq, vp):
+                        k[x, y] += 1.0
+
+        # Rescale the confusion matrix    
+        k = k/np.sum(k, axis=0)*100.0
+
+        logger.info("Classifier Accuracy: {:.1f}%".format(i*100))
+        logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
 
 
 if __name__ == '__main__':
