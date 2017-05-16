@@ -108,7 +108,7 @@ def run(args):
             return
 
     # The TensorFlow / operation automatically coerces the output type to a float. See [here](https://www.tensorflow.org/versions/master/api_docs/python/tf/divide).
-    count_fraction = lambda x: tf.count_nonzero(x)/tf.size(x)
+    count_fraction = lambda x: tf.reduce_mean(tf.cast(x, tf.float32))
     with tf.name_scope('metrics'):
         # Discriminator losses
         with tf.name_scope('dis_fake'):
