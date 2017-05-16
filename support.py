@@ -341,10 +341,6 @@ def argparser():
         help='the name of files with image preprocessing instructions in the preprocessor package; applied in left-to-right order')
     parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
         help="the interval, in seconds, at which weights are saved")
-    parser.add_argument('--image-columns', default=1, type=int,
-        help="the number of columns to group produced images into")        
-    parser.add_argument('--resume', action='store_const', const=True, default=False,
-        help='attempt to load saved weights and continue training')
     parser.add_argument('--batches', default=config.NUM_BATCHES_DEFAULT, type=int,
         help='the last batch number to process')
 

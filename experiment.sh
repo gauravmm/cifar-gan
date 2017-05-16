@@ -14,5 +14,4 @@ colorize python3 adversarial.py  \
     --discriminator simple_model \
     --log-interval 600           \
     --batches 2500               \
-    --image-columns 4            \
-    test
+    train

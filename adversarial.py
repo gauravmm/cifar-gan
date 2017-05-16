@@ -307,6 +307,9 @@ def run(args):
                 batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen})
                 logwriter.add_summary(summ_bal, global_step=batch)
 
+                if batch >= args.batches:
+                    sv.stop()
+
     #
     # Testing
     #
