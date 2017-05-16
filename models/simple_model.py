@@ -87,7 +87,7 @@ def discriminator(inp, num_classes):
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
-    with tf.name_scope('discriminator'):
+    with tf.variable_scope('discriminator'):
         y1 = tf.layers.dense(x, 16, name='fc5',
                              activation=leakyReLu,
                              kernel_initializer=init_kernel,
@@ -96,7 +96,8 @@ def discriminator(inp, num_classes):
         y1 = tf.layers.dense(y1, 1, activation=tf.sigmoid, name="fc6")
         y1 = tf.squeeze(y1, 1, name='output_node_dis')
 
-    with tf.name_scope('classifier'):
+    # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
+    with tf.variable_scope('classifier'):
         y2 = tf.layers.dense(x, num_classes, activation=tf.sigmoid, name='output_node_cls')
 
     # Return (discriminator, classifier)

@@ -6,17 +6,23 @@ from support import MovingAverage
 
 # Size of random seed used by the generator's input tensor:
 SEED_DIM = (32,)
-# Size of the output. The generator, discriminator and dataset will be required to use this size.
+# Size of the output. The generator, discriminator and dataset will be required to use this size:
 IMAGE_DIM = (32, 32, 3)
-# Number of classes. The generator, discriminator and dataset will be required to use this size.
+# Number of classes. The generator, discriminator and dataset will be required to use this size:
 NUM_CLASSES = 10
-
+# Number of images per batch:
 BATCH_SIZE   = 64
-
-# Semi-supervised
+# Semi-supervised data fraction:
 LABELLED_FRACTION = 0.10
+# WGAN Compatibility:
+# If you set this flag, you also need to:
+#   1) set WGAN_DIS_CLIP to a small value (~0.01), and--
+#   2) set the *_halt functions appropriately.
+WGAN_ENABLE = False
+# In the training step of a WGAN, the discriminator weights will be clipped to (-WGAN_DIS_CLIP, WGAN_DIS_CLIP).
+# If WGAN_ENABLE is False, this parameter is not required.
+WGAN_DIS_CLIP = 0.01
 
-# As described in appendix A of DeepMind's AC-GAN paper
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
@@ -95,7 +101,7 @@ classifier_halt     = _halting.classifier_halt
 #classifier_halt    = lambda b, s, l: s >= 1
 
 ENABLE_TRAINING_DIS = True
-ENABLE_TRAINING_CLS = False
+ENABLE_TRAINING_CLS = True
 ENABLE_TRAINING_GEN = True
 
 
