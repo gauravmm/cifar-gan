@@ -80,6 +80,25 @@ class HaltRelativeCorrectness(object):
             return True
         return False
 
+
+_halting = HaltRelativeCorrectness()
+
+discriminator_halt  = _halting.discriminator_halt
+generator_halt      = _halting.generator_halt
+classifier_halt     = _halting.classifier_halt
+
+# Naive halting criteria:
+#discriminator_halt = lambda b, s, l: s >= 1
+#generator_halt     = lambda b, s, l: s >= 6
+#classifier_halt    = lambda b, s, l: s >= 1
+
+ENABLE_TRAINING_DIS = True
+ENABLE_TRAINING_CLS = True
+ENABLE_TRAINING_GEN = True
+
+
+# Unused, but a good example:
+"""
 class HaltRelativeLoss(object):
     def __init__(self):
         self.gen_to_dis_ratio = lambda gen_loss, dis_loss: 4.5 + 2.*(gen_loss-dis_loss)/dis_loss
@@ -107,14 +126,4 @@ class HaltRelativeLoss(object):
     
     def classifier_halt(self, batch, step, metrics):
         return step >= self.cls_steps
-
-_halting = HaltRelativeCorrectness()
-
-#discriminator_halt = lambda b, s, l: s >= 1
-discriminator_halt  = _halting.discriminator_halt
-
-#generator_halt     = lambda b, s, l: s >= 6
-generator_halt      = _halting.generator_halt
-
-#classifier_halt    = lambda b, s, l: s >= 1
-classifier_halt     = _halting.classifier_halt
+"""

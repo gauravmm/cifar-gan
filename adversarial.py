@@ -242,64 +242,66 @@ def run(args):
                 # This training proceeds in two phases: (1) discriminator, then (2) generator.
                 # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
                 # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
-                # distinguish between "fake"" (generated) and real images by running it on one step of each.
-                
-                step_dis = 0
-                while True:
-                    # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
-                    # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
-                    # same time so we can capture the summary op.
-                    (_, loss_fake, fake_true_neg,), (_, loss_real, real_true_pos), summ_dis = sess.run(
-                        ((train_dis_fake, dis_loss_fake, train_dis_fake_true_neg),
-                        (train_dis_real, dis_loss_real, train_dis_real_true_pos), summary_dis), feed_dict={
-                        gen_input_seed: next(data.rand_vec),
-                        gen_input_class: next(data.rand_label_vec),
-                        dis_label_fake: next(data.label_dis_fake),
-                        dis_input: next(data.unlabelled)[0],
-                        dis_label_real: next(data.label_dis_real)
-                    })
-                    step_dis += 1
-                    logwriter.add_summary(summ_dis, global_step=batch)
+                # distinguish between "fake"" (generated) and real images by running it on one step of each.                
+                if args.hyperparam.ENABLE_TRAINING_DIS:
+                    step_dis = 0
+                    while True:
+                        # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
+                        # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
+                        # same time so we can capture the summary op.
+                        (_, loss_fake, fake_true_neg,), (_, loss_real, real_true_pos), summ_dis = sess.run(
+                            ((train_dis_fake, dis_loss_fake, train_dis_fake_true_neg),
+                            (train_dis_real, dis_loss_real, train_dis_real_true_pos), summary_dis), feed_dict={
+                            gen_input_seed: next(data.rand_vec),
+                            gen_input_class: next(data.rand_label_vec),
+                            dis_label_fake: next(data.label_dis_fake),
+                            dis_input: next(data.unlabelled)[0],
+                            dis_label_real: next(data.label_dis_real)
+                        })
+                        step_dis += 1
+                        logwriter.add_summary(summ_dis, global_step=batch)
 
-                    if args.hyperparam.discriminator_halt(batch, step_dis, 
-                        {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
-                        "real_loss": loss_real, "real_true_pos": real_true_pos}):
-                        break
+                        if args.hyperparam.discriminator_halt(batch, step_dis, 
+                            {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
+                            "real_loss": loss_real, "real_true_pos": real_true_pos}):
+                            break
                 
-                # Train classifier
-                step_cls = 0
-                while True:
-                    data_x, data_y = next(data.labelled)
-                    _, loss_label, accuracy, summ_cls = sess.run(
-                        [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
-                        dis_input: data_x,
-                        dis_class: data_y,
-                        dis_label_real: next(data.label_dis_real)
-                    })
-                    step_cls += 1
-                    logwriter.add_summary(summ_cls, global_step=batch)
-                    
-                    if args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
-                        break
+                # Second, we train the classifier
+                if args.hyperparam.ENABLE_TRAINING_CLS:
+                    step_cls = 0
+                    while True:
+                        data_x, data_y = next(data.labelled)
+                        _, loss_label, accuracy, summ_cls = sess.run(
+                            [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
+                            dis_input: data_x,
+                            dis_class: data_y,
+                            dis_label_real: next(data.label_dis_real)
+                        })
+                        step_cls += 1
+                        logwriter.add_summary(summ_cls, global_step=batch)
+                        
+                        if args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
+                            break
                 
 
-                # Second, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
+                # Finally, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
                 # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
                 # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
                 # vector, it classifies images as real.
-                step_gen = 0
-                while True:
-                    _, loss, fooling_rate, summ_gen = sess.run(
-                        [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
-                        gen_input_seed: next(data.rand_vec),
-                        gen_input_class: next(data.rand_label_vec),
-                        dis_label_real: next(data.label_gen_real)
-                    })
-                    step_gen += 1
-                    logwriter.add_summary(summ_gen, global_step=batch)
-                    
-                    if args.hyperparam.generator_halt(batch, step_gen, {"gen_loss": loss, "gen_fooling": fooling_rate}):
-                        break
+                if args.hyperparam.ENABLE_TRAINING_GEN:
+                    step_gen = 0
+                    while True:
+                        _, loss, fooling_rate, summ_gen = sess.run(
+                            [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
+                            gen_input_seed: next(data.rand_vec),
+                            gen_input_class: next(data.rand_label_vec),
+                            dis_label_real: next(data.label_gen_real)
+                        })
+                        step_gen += 1
+                        logwriter.add_summary(summ_gen, global_step=batch)
+                        
+                        if args.hyperparam.generator_halt(batch, step_gen, {"gen_loss": loss, "gen_fooling": fooling_rate}):
+                            break
 
                 #
                 # That is the entire training algorithm.
