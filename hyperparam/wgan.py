@@ -14,9 +14,9 @@ LABELLED_FRACTION = 0.10
 WGAN_ENABLE = True
 WGAN_DIS_CLIP = 0.01
 
-optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
+optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.00005)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.00005)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 
 # These noise and regularization methods are not required for WGANs:
 label_flipping_prob = 0.0
