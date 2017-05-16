@@ -20,7 +20,6 @@ import numpy as np
 import config
 import support
 import tensorflow as tf
-import tqdm
 
 #
 # Init
@@ -317,19 +316,20 @@ def run(args):
         
         logger.info("Starting tests.")
         
-        i = 0
+        num = 0
         acc = 0.0
         k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
-        with tf.Session() as sess:
+        sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
+        with sv.managed_session() as sess:
             # Load weights
-            for _, d in zip(tqdm.trange(0, data.num_labelled, args.hyperparam.batch_size), data.labelled):
+            for i, d in enumerate(data.labelled):
                 data_x, data_y = d
                 
                 v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x})
                 # Update the current accuracy score
                 
-                i += v.shape[0]
+                num += v.shape[0]
                 vp = np.argmax(v, axis=1)
                 vq = np.argmax(data_y, axis=1)
 
@@ -338,10 +338,10 @@ def run(args):
                         k[x, y] += 1.0
 
         # Rescale the confusion matrix    
-        k = k/np.sum(k, axis=0)*100.0
+        k = k/(np.sum(k, axis=1) + 1e-7)*100.0
 
-        logger.info("Classifier Accuracy: {:.1f}%".format(i*100))
-        logger.info("Confusion Matrix [Actual, Reported] (%):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
+        logger.info("Classifier Accuracy: {:.1f}%".format(acc/num*100))
+        logger.info("Confusion Matrix [Actual Rows, Reported Columns] (% of Row):\n" + np.array_str(k, max_line_width=120, precision=1, suppress_small=True))
 
 
 if __name__ == '__main__':
