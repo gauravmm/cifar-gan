@@ -61,7 +61,7 @@ class Preprocessor(object):
         self.apply_train = applyfunc(lambda p: p.apply_train)
         self.apply_test = applyfunc(lambda p: p.apply_test)
 
-        logger.info("Applied preprocessors: {}.".format(
+        logger.info("Loaded preprocessors: {}.".format(
                         " -> ".join([x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__
                             for x in args.preprocessor])))
 
