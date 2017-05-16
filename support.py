@@ -62,8 +62,7 @@ class Preprocessor(object):
         self.apply_test = applyfunc(lambda p: p.apply_test)
 
         logger.info("Loaded preprocessors: {}.".format(
-                        " -> ".join([x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__
-                            for x in args.preprocessor])))
+                        " -> ".join([x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__ for x in args.preprocessor])))
 
 
 class TrainData(object):
