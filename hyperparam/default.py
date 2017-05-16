@@ -46,7 +46,7 @@ class HaltRelativeCorrectness(object):
         self.generator_correct = 0.51
         self.classifier_correct = 0.3
         self.min_step_dis = 1
-        self.max_step_dis = 3
+        self.max_step_dis = 6
         self.min_step_gen = 4
         self.max_step_gen = 12
 
@@ -58,9 +58,11 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_dis:
             return True
-        if (metrics["real_true_pos"] + metrics["fake_true_neg"])/2 < self.discriminator_correct:
-            return True
-        return False
+        if metrics["real_true_pos"] < self.discriminator_correct:
+            return False
+        if metrics["fake_true_neg"] < self.discriminator_correct:
+            return False
+        return True
 
     def generator_halt(self, batch, step, metrics):
         if step < self.min_step_gen:
@@ -93,7 +95,7 @@ classifier_halt     = _halting.classifier_halt
 #classifier_halt    = lambda b, s, l: s >= 1
 
 ENABLE_TRAINING_DIS = True
-ENABLE_TRAINING_CLS = True
+ENABLE_TRAINING_CLS = False
 ENABLE_TRAINING_GEN = True
 
 

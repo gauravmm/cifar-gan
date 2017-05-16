@@ -28,13 +28,14 @@ import tensorflow as tf
 np.random.seed(54183)
 
 # Logging
-logging.getLogger("tensorflow").setLevel(logging.WARNING)
-logging.basicConfig(filename=config.PATH['log'], level=logging.DEBUG, format='[%(asctime)s, %(levelname)s @%(name)s] %(message)s')
-# Logger
+logfile = logging.FileHandler(filename=config.PATH['log'], mode='w')
+logfile.setLevel(logging.DEBUG)
+logfile.setFormatter(logging.Formatter('[%(asctime)s, %(levelname)s @%(name)s] %(message)s'))
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 console.setFormatter(logging.Formatter('[%(asctime)s %(levelname)-3s @%(name)s] %(message)s', datefmt='%H:%M:%S'))
-logging.getLogger().addHandler(console)
+logging.basicConfig(level=logging.DEBUG, handlers=[logfile, console])
+logging.getLogger("tensorflow").setLevel(logging.WARNING)
 logger = logging.getLogger()
 
 def main(args):
@@ -149,7 +150,9 @@ def run(args):
 
     variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
     discriminator_variables = [v for v in variables if 'model_discriminator/' in v.name]
+    logger.debug("Discriminator + Classifier Variables::\n\t{}".format(",\n\t".join(v.name for v in discriminator_variables)))
     generator_variables     = [v for v in variables if 'model_generator/' in v.name]
+    logger.debug("Generator Variables:\n\t{}".format(",\n\t".join(v.name for v in generator_variables)))
 
     # Train ops
     with tf.name_scope('train_ops'):
@@ -219,6 +222,13 @@ def run(args):
 
     increment_global_step = tf.assign_add(global_step, 1, name="increment_global_step")
 
+    if not args.hyperparam.ENABLE_TRAINING_DIS:
+        logger.warn("Training the discriminator is disabled! If this is not intentional, set `ENABLE_TRAINING_DIS = True` in your hyperparameter definition.")
+    if not args.hyperparam.ENABLE_TRAINING_CLS:
+        logger.warn("Training the classifier is disabled! If this is not intentional, set `ENABLE_TRAINING_CLS = True` in your hyperparameter definition.")
+    if not args.hyperparam.ENABLE_TRAINING_GEN:
+        logger.warn("Training the generator is disabled! If this is not intentional, set `ENABLE_TRAINING_GEN = True` in your hyperparameter definition.")
+
     #
     # Training
     #
@@ -243,8 +253,8 @@ def run(args):
                 # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
                 # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
                 # distinguish between "fake"" (generated) and real images by running it on one step of each.                
+                step_dis = 0
                 if args.hyperparam.ENABLE_TRAINING_DIS:
-                    step_dis = 0
                     while True:
                         # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
                         # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
@@ -267,8 +277,8 @@ def run(args):
                             break
                 
                 # Second, we train the classifier
+                step_cls = 0
                 if args.hyperparam.ENABLE_TRAINING_CLS:
-                    step_cls = 0
                     while True:
                         data_x, data_y = next(data.labelled)
                         _, loss_label, accuracy, summ_cls = sess.run(
@@ -288,8 +298,8 @@ def run(args):
                 # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
                 # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
                 # vector, it classifies images as real.
+                step_gen = 0
                 if args.hyperparam.ENABLE_TRAINING_GEN:
-                    step_gen = 0
                     while True:
                         _, loss, fooling_rate, summ_gen = sess.run(
                             [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={

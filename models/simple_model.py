@@ -7,11 +7,7 @@ import tensorflow as tf
 # GENERATOR
 #
 
-# Name of generator
-NAME="Simple"
-#leaky relu coefficient
-ALPHA = 0.3
-def leakyReLu(x, alpha=ALPHA):
+def leakyReLu(x, alpha=0.3):
     return tf.nn.relu(x) - (alpha * tf.nn.relu(-x))
 
 def generator(inp, inp_label, output_size):
@@ -60,10 +56,6 @@ def generator(inp, inp_label, output_size):
 #
 # DISCRIMINATOR
 #
-
-# Name of discriminator
-# Each generator/discriminator needs a name if they are in different files
-# NAME="Simple"
 
 def discriminator(inp, num_classes):
     init_kernel = tf.random_normal_initializer(mean=0.0, stddev=0.02)

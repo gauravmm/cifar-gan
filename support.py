@@ -53,6 +53,7 @@ Y_FAKE = 1
 
 class Preprocessor(object):
     def __init__(self, args):
+        logger = logging.getLogger("preprocessor")
         # Assemble the preprocessor:
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
