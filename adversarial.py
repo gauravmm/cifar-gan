@@ -107,18 +107,20 @@ def run(args):
                 str(dis_output_fake_cls.get_shape())))
             return
 
+    # The TensorFlow / operation automatically coerces the output type to a float. See [here](https://www.tensorflow.org/versions/master/api_docs/python/tf/divide).
+    count_fraction = lambda x: tf.count_nonzero(x)/tf.size(x)
     with tf.name_scope('metrics'):
         # Discriminator losses
         with tf.name_scope('dis_fake'):
             with tf.name_scope('loss'):
                 dis_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=dis_label_fake, logits=dis_output_fake_dis))
             with tf.name_scope('true_neg'):
-                train_dis_fake_true_neg = tf.reduce_mean(tf.cast(tf.greater_equal(dis_output_fake_dis, 0.5), tf.int32))
+                train_dis_fake_true_neg = count_fraction(tf.greater_equal(dis_output_fake_dis, 0.5))
         with tf.name_scope('dis_real'):
             with tf.name_scope('loss'):
                 dis_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=dis_label_real, logits=dis_output_real_dis))
             with tf.name_scope('true_pos'):
-                train_dis_real_true_pos = tf.reduce_mean(tf.cast(tf.less(dis_output_real_dis, 0.5), tf.int32))
+                train_dis_real_true_pos = count_fraction(tf.less(dis_output_real_dis, 0.5))
 
         dis_loss = (dis_loss_fake + dis_loss_real) / 2
 
@@ -135,7 +137,7 @@ def run(args):
                     + args.hyperparam.loss_weights_classifier["classifier"]    * cls_loss_cls
             
             with tf.name_scope('acc'):
-                cls_accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(dis_class, axis=1), tf.argmax(dis_output_real_cls, axis=1)), tf.int32))
+                cls_accuracy = count_fraction(tf.equal(tf.argmax(dis_class, axis=1), tf.argmax(dis_output_real_cls, axis=1)))
 
         # Generator loss
         with tf.name_scope('gen'):
@@ -150,7 +152,7 @@ def run(args):
                 gen_loss_wgan = gen_loss_dis
 
             with tf.name_scope("fooling_rate"):
-                gen_fooling = tf.reduce_mean(tf.cast(tf.less(dis_output_fake_dis, 0.5), tf.int32))
+                gen_fooling = count_fraction(tf.less(dis_output_fake_dis, 0.5))
 
 
         logger.info("Model constructed.")
