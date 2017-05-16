@@ -70,43 +70,43 @@ class TrainData(object):
     def __init__(self, args, preproc):
         logger = logging.getLogger("traindata")
 
-        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
+        unlabelled, labelled = args.data.get_data("train", args.hyperparam.BATCH_SIZE, labelled_fraction=args.hyperparam.LABELLED_FRACTION)
         logger.info("Training data loaded from disk.")
 
         unlabelled = map(preproc.apply_train, unlabelled)
         labelled = map(preproc.apply_train, labelled)
         logger.info("Applied training preprocessor.")
 
-        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
-        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
+        self.rand_vec        = _random_stream(args.hyperparam.BATCH_SIZE, args.hyperparam.SEED_DIM)
+        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.BATCH_SIZE, args.hyperparam.NUM_CLASSES)
         # Present images them in chunks of exactly batch-size:
-        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
-        self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
+        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.BATCH_SIZE)
+        self.labelled        = _image_stream_batch(labelled, args.hyperparam.BATCH_SIZE)
 
         # Use to label a discriminator batch as real
         self._label_dis_real = map(lambda a, b: a + b,
-                            _value_stream(args.hyperparam.batch_size, Y_REAL),
-                            _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.batch_size)))
+                            _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL),
+                            _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.BATCH_SIZE)))
         # Use to label a discriminator batch as fake
         self._label_dis_fake = map(lambda a, b: a + b,
-                            _value_stream(args.hyperparam.batch_size, Y_FAKE),
-                            _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
+                            _value_stream(args.hyperparam.BATCH_SIZE, Y_FAKE),
+                            _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.BATCH_SIZE)))
         # Random flipping support
         self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob], self._label_dis_fake, self._label_dis_real)
         self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob], self._label_dis_real, self._label_dis_fake)
         # Use to label a generator batch as real
-        self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+        self.label_gen_real = _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL)
 
 class TestData(object):
     def __init__(self, args, preproc):
-        num, labelled = args.data.get_data("test", args.hyperparam.batch_size)
+        num, labelled = args.data.get_data("test", args.hyperparam.BATCH_SIZE)
         logger.info("Training data loaded from disk.")
 
         self.labelled = map(preproc.apply_test, labelled)
         logger.info("Applied test preprocessor.")
         
         self.num_labelled = num
-        self.label_dis_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+        self.label_dis_real = _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL)
 
 #
 # Accuracy metric

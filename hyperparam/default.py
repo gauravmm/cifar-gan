@@ -11,15 +11,15 @@ IMAGE_DIM = (32, 32, 3)
 # Number of classes. The generator, discriminator and dataset will be required to use this size.
 NUM_CLASSES = 10
 
+BATCH_SIZE   = 64
+
 # Semi-supervised
-labelled_fraction = 0.10
+LABELLED_FRACTION = 0.10
 
 # As described in appendix A of DeepMind's AC-GAN paper
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
-#optimizers.SGD(lr=0.0002, decay=1e-8, momentum=0.9, nesterov=False)
-batch_size   = 64
 
 # This specifies the probability of a label being flipped, which allows the true and fake distributions to overlap
 # to allow the GAN to discover this. There's an argument that (1) the space of good solutions is large and flat (i.e. 
