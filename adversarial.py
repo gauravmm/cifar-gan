@@ -234,6 +234,7 @@ def run(args):
         tf.summary.histogram('label_predicted', tf.argmax(dis_output_real_cls, 1))
 
     with tf.name_scope('summary_generator'):
+        tf.summary.histogram('pre_output', gen_output)
         tf.summary.image('output', preproc.unapply(gen_output), max_outputs=32)
         tf.summary.scalar('loss/cls', gen_loss_cls)
         tf.summary.scalar('loss/dis', gen_loss_dis)

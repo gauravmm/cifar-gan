@@ -12,7 +12,8 @@ def apply(inp):
     You may create or remove elements from the batch as necessary.
     """
     img, label = inp
-    return (img.astype(np.float32)/127.5 - 1.0, label)
+    # return (img.astype(np.float32)/127.5 - 1.0, label)
+    return (img.astype(np.float32)/255.0, label)
 
 apply_test = apply
 apply_train = apply
@@ -23,4 +24,4 @@ def unapply(inp):
     Inverts the transformation to input, using TensorFlow. This is used to display generated images.
     You may not create or remove elements from the batch.
     """
-    return (inp + 1.0) / 2
+    return tf.cast(inp * 255.0, tf.uint8)
