@@ -12,19 +12,19 @@ LABELLED_FRACTION = 0.10
 WGAN_ENABLE = False
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.1)
 optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
 
-label_flipping_prob = 0.1
-label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
+label_flipping_prob = 0.0
+label_smoothing  = lambda is_real, sz: 0
 
 loss_weights_generator = {'discriminator': 1.0, 'classifier': 0.0}
 loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 discriminator_halt = lambda b, s, l: s >= 1
-generator_halt     = lambda b, s, l: s >= 6
+generator_halt     = lambda b, s, l: s >= 4
 classifier_halt    = lambda b, s, l: s >= 1
 
 ENABLE_TRAINING_DIS = True
 ENABLE_TRAINING_CLS = False
-ENABLE_TRAINING_GEN = True
+ENABLE_TRAINING_GEN = False

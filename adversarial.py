@@ -48,6 +48,8 @@ def main(args):
     args contains the commandline arguments, and the classes specified by commandline argument.
     """
 
+    logger.debug("Commandline Arguments: " + str(args))
+
     logger.info("Loaded dataset        : {}".format(args.data.__file__))
     logger.info("Loaded generator      : {}".format(args.generator.__file__))
     logger.info("Loaded discriminator  : {}".format(args.discriminator.__file__))
@@ -80,8 +82,8 @@ def run(args):
                     _shape_str([None] + list(args.hyperparam.IMAGE_DIM)), str(gen_output.get_shape())))
 
     dis_input      = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis_image")
-    dis_label_real = tf.placeholder(tf.float32, shape=[None], name="input_dis_label")
-    dis_label_fake = tf.placeholder(tf.float32, shape=[None], name="input_dis_label")
+    dis_label_real = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
+    dis_label_fake = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
     dis_class      = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
     with tf.variable_scope('model_discriminator') as disc_scope:
         # Make sure that the generator and real images are the same size:
@@ -108,21 +110,23 @@ def run(args):
             return
 
     # The TensorFlow / operation automatically coerces the output type to a float. See [here](https://www.tensorflow.org/versions/master/api_docs/python/tf/divide).
+    func_loss = tf.nn.sigmoid_cross_entropy_with_logits
+    #func_loss = lambda **kwargs: tf.nn.l2_loss(kwargs["labels"] - kwargs["logits"])
     count_fraction = lambda x: tf.reduce_mean(tf.cast(x, tf.float32))
     with tf.name_scope('metrics'):
         # Discriminator losses
         with tf.name_scope('dis_fake'):
             with tf.name_scope('loss'):
-                dis_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=dis_label_fake, logits=dis_output_fake_dis))
+                dis_loss_fake = tf.reduce_mean(func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
             with tf.name_scope('true_neg'):
                 train_dis_fake_true_neg = count_fraction(tf.greater_equal(dis_output_fake_dis, 0.5))
         with tf.name_scope('dis_real'):
             with tf.name_scope('loss'):
-                dis_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=dis_label_real, logits=dis_output_real_dis))
+                dis_loss_real = tf.reduce_mean(func_loss(labels=dis_label_real, logits=dis_output_real_dis))
             with tf.name_scope('true_pos'):
                 train_dis_real_true_pos = count_fraction(tf.less(dis_output_real_dis, 0.5))
 
-        dis_loss = (dis_loss_fake + dis_loss_real) / 2
+        dis_loss = dis_loss_fake + dis_loss_real
 
         with tf.name_scope('wgan'):
             dis_loss_wgan = dis_loss_real - dis_loss_fake
@@ -130,7 +134,7 @@ def run(args):
         # Classifier loss
         with tf.name_scope('cls'):
             with tf.name_scope('dis'):
-                cls_loss_dis  = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=dis_label_real, logits=dis_output_real_dis))
+                cls_loss_dis  = tf.reduce_mean(func_loss(labels=dis_label_real, logits=dis_output_real_dis))
             with tf.name_scope('cls'):
                 cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_class, logits=dis_output_real_cls))
             cls_loss = args.hyperparam.loss_weights_classifier["discriminator"] * cls_loss_dis \
@@ -142,7 +146,7 @@ def run(args):
         # Generator loss
         with tf.name_scope('gen'):
             with tf.name_scope('dis'):
-                gen_loss_dis  = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=dis_label_real, logits=dis_output_fake_dis))
+                gen_loss_dis  = tf.reduce_mean(func_loss(labels=dis_label_real, logits=dis_output_fake_dis))
             with tf.name_scope('cls'):
                 gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_input_class, logits=dis_output_fake_cls))
             gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
@@ -165,8 +169,9 @@ def run(args):
     logger.debug("Discriminator + Classifier Variables::\n\t{}".format(",\n\t".join(v.name for v in discriminator_variables)))
     generator_variables     = [v for v in variables if 'model_generator/' in v.name]
     logger.debug("Generator Variables:\n\t{}".format(",\n\t".join(v.name for v in generator_variables)))
-    wgan_clipped_variables  =  [v for v in discriminator_variables if "model_discriminator/classifier/" not in v.name]
-    logger.debug("WGAN Clipped Variables:\n\t{}".format(",\n\t".join(v.name for v in wgan_clipped_variables)))
+    if args.hyperparam.WGAN_ENABLE:
+        wgan_clipped_variables  =  [v for v in discriminator_variables if "model_discriminator/classifier/" not in v.name]
+        logger.debug("WGAN Clipped Variables:\n\t{}".format(",\n\t".join(v.name for v in wgan_clipped_variables)))
 
     # Train ops
     with tf.name_scope('train_ops'):
@@ -184,11 +189,12 @@ def run(args):
                             minimize(gen_loss, var_list=generator_variables)
         
         if args.hyperparam.WGAN_ENABLE:
+            logger.info("Building WGAN optimizer.")
             with tf.name_scope('wgan'):
                 train_dis = args.hyperparam.optimizer_dis. \
                                     minimize(dis_loss_wgan, var_list=discriminator_variables)
                 train_gen = args.hyperparam.optimizer_dis. \
-                                    minimize(gen_loss_wgan, var_list=discriminator_variables)
+                                    minimize(gen_loss_wgan, var_list=generator_variables)
                 logger.warn("There is no classifier implementation for WGAN. Ensure that `ENABLE_TRAINING_CLS` is False in your hyperparameter definitions.")
 
 
@@ -220,11 +226,15 @@ def run(args):
             tf.summary.scalar('loss', dis_loss_fake)
             tf.summary.scalar('true_neg', train_dis_fake_true_neg)
             tf.summary.histogram('dis', dis_output_fake_dis)
+            tf.summary.histogram('label', dis_label_fake)
+            tf.summary.histogram('crossentropy', func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
 
         with tf.name_scope('real'):
             tf.summary.scalar('loss', dis_loss_real)
             tf.summary.scalar('true_pos', train_dis_real_true_pos)
             tf.summary.histogram('dis', dis_output_real_dis)
+            tf.summary.histogram('label', dis_label_real)
+            tf.summary.histogram('crossentropy', func_loss(labels=dis_label_real, logits=dis_output_real_dis))
         
     with tf.name_scope('summary_classifier'):
         tf.summary.scalar('loss/cls', cls_loss_cls)
@@ -277,7 +287,7 @@ def run(args):
 
             batch = sess.run(global_step)
             logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
-            logger.info("Starting training from batch {}. Saving model every {}s.".format(batch, args.log_interval))
+            logger.info("Starting training from batch {} to {}. Saving model every {}s.".format(batch, args.batches, args.log_interval))
 
             # Format the score printing
             while not sv.should_stop():
