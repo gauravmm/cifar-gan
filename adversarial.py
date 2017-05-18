@@ -367,6 +367,7 @@ def run(args):
 
                 if batch >= args.batches:
                     sv.stop()
+                    logger.info("Batch limit reached, halting...")
 
     #
     # Testing
