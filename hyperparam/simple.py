@@ -18,7 +18,7 @@ optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.2,size=sz)
 
-loss_weights_generator = {'discriminator': 1.0, 'classifier': 1.0}
+loss_weights_generator = {'discriminator': 1.0, 'classifier': 0.0}
 loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 discriminator_halt = lambda b, s, l: s >= 1

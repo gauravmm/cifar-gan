@@ -193,8 +193,9 @@ def run(args):
 
 
     # Clipping operations for WGAN support:
-    with tf.name_scope('wgan_ops'):
-        wgan_dis_clip = tf.group(*[v.assign(tf.clip_by_value(v, -1*args.hyperparam.WGAN_DIS_CLIP, args.hyperparam.WGAN_DIS_CLIP)) for v in discriminator_variables if "model_discriminator/classifier/" not in v.name])
+    if args.hyperparam.WGAN_ENABLE:
+        with tf.name_scope('wgan_ops'):
+            wgan_dis_clip = tf.group(*[v.assign(tf.clip_by_value(v, -1*args.hyperparam.WGAN_DIS_CLIP, args.hyperparam.WGAN_DIS_CLIP)) for v in discriminator_variables if "model_discriminator/classifier/" not in v.name])
         
 
     with tf.name_scope('step_count'):
