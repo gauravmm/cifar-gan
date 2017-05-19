@@ -104,6 +104,8 @@ ENABLE_TRAINING_DIS = True
 ENABLE_TRAINING_CLS = True
 ENABLE_TRAINING_GEN = True
 
+# If this is true, add more items to the training summaries.
+SUMMARIZE_MORE = True
 
 # Unused, but a good example:
 """

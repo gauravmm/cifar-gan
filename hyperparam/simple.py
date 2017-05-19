@@ -12,7 +12,7 @@ LABELLED_FRACTION = 0.10
 WGAN_ENABLE = False
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.1)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
 
 label_flipping_prob = 0.0
@@ -28,3 +28,5 @@ classifier_halt    = lambda b, s, l: s >= 1
 ENABLE_TRAINING_DIS = True
 ENABLE_TRAINING_CLS = False
 ENABLE_TRAINING_GEN = False
+
+SUMMARIZE_MORE = True

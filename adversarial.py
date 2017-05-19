@@ -126,7 +126,7 @@ def run(args):
             with tf.name_scope('true_pos'):
                 train_dis_real_true_pos = count_fraction(tf.less(dis_output_real_dis, 0.5))
 
-        dis_loss = dis_loss_fake + dis_loss_real
+        dis_loss = dis_loss_real + dis_loss_fake
 
         with tf.name_scope('wgan'):
             dis_loss_wgan = dis_loss_real - dis_loss_fake
@@ -226,15 +226,24 @@ def run(args):
             tf.summary.scalar('loss', dis_loss_fake)
             tf.summary.scalar('true_neg', train_dis_fake_true_neg)
             tf.summary.histogram('dis', dis_output_fake_dis)
-            tf.summary.histogram('label', dis_label_fake)
-            tf.summary.histogram('crossentropy', func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
+
+            if args.hyperparam.SUMMARIZE_MORE:
+                with tf.name_scope('debug'):        
+                    tf.summary.histogram('label', dis_label_fake)
+                    tf.summary.histogram('crossentropy', func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
+                    tf.summary.histogram('pre_generator_output', gen_output)
+                    tf.summary.image('generator_output', preproc.unapply(gen_output), max_outputs=32)
+                    tf.summary.image('real_input', preproc.unapply(dis_input), max_outputs=32)
 
         with tf.name_scope('real'):
             tf.summary.scalar('loss', dis_loss_real)
             tf.summary.scalar('true_pos', train_dis_real_true_pos)
             tf.summary.histogram('dis', dis_output_real_dis)
-            tf.summary.histogram('label', dis_label_real)
-            tf.summary.histogram('crossentropy', func_loss(labels=dis_label_real, logits=dis_output_real_dis))
+
+            if args.hyperparam.SUMMARIZE_MORE:
+                with tf.name_scope('debug'):        
+                    tf.summary.histogram('label', dis_label_real)
+                    tf.summary.histogram('crossentropy', func_loss(labels=dis_label_real, logits=dis_output_real_dis))
         
     with tf.name_scope('summary_classifier'):
         tf.summary.scalar('loss/cls', cls_loss_cls)
@@ -245,7 +254,6 @@ def run(args):
         tf.summary.histogram('label_predicted', tf.argmax(dis_output_real_cls, 1))
 
     with tf.name_scope('summary_generator'):
-        tf.summary.histogram('pre_output', gen_output)
         tf.summary.image('output', preproc.unapply(gen_output), max_outputs=32)
         tf.summary.scalar('loss/cls', gen_loss_cls)
         tf.summary.scalar('loss/dis', gen_loss_dis)
