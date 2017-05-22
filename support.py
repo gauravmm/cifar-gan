@@ -14,7 +14,6 @@ import sys
 import numpy as np
 
 import config
-import keras.backend as K
 from config import IMAGE_GUTTER
 from typing import Tuple
 
@@ -52,54 +51,62 @@ class MovingAverage(object):
 Y_REAL = 0
 Y_FAKE = 1
 
-class TrainData(object):
+class Preprocessor(object):
     def __init__(self, args):
-        unlabelled, labelled = args.data.get_data("train", args.hyperparam.batch_size, labelled_fraction=args.hyperparam.labelled_fraction)
-        logger.info("Training data loaded from disk.")
-
+        logger = logging.getLogger("preprocessor")
+        # Assemble the preprocessor:
         # We apply all the preprocessors in order to get a generator that automatically applies preprocessing.
         self.unapply = functools.reduce(lambda f, g: lambda x: g(f(x)), [p.unapply for p in reversed(args.preprocessor)], lambda x: x)
-        for p, np in zip(args.preprocessor, preproc_names(args)):
-            unlabelled = itertools.starmap(p.apply_train, unlabelled)
-            labelled   = itertools.starmap(p.apply_train, labelled)
-            logger.info("Applied train preprocessor {}.".format(np))
         
-        self.rand_vec        = _random_stream(args.hyperparam.batch_size, args.hyperparam.SEED_DIM)
-        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.batch_size, args.hyperparam.NUM_CLASSES)
+        applyfunc = lambda h: functools.reduce(lambda f, g: lambda x: g(f(x)), [h(p) for p in args.preprocessor], lambda x: x)
+        self.apply_train = applyfunc(lambda p: p.apply_train)
+        self.apply_test = applyfunc(lambda p: p.apply_test)
+
+        logger.info("Loaded preprocessors: {}.".format(
+                        " -> ".join([x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__ for x in args.preprocessor])))
+
+
+class TrainData(object):
+    def __init__(self, args, preproc):
+        logger = logging.getLogger("traindata")
+
+        unlabelled, labelled = args.data.get_data("train", args.hyperparam.BATCH_SIZE, labelled_fraction=args.hyperparam.LABELLED_FRACTION)
+        logger.info("Training data loaded from disk.")
+
+        unlabelled = map(preproc.apply_train, unlabelled)
+        labelled = map(preproc.apply_train, labelled)
+        logger.info("Applied training preprocessor.")
+
+        self.rand_vec        = _random_stream(args.hyperparam.BATCH_SIZE, args.hyperparam.SEED_DIM)
+        self.rand_label_vec  = _random_1hot_stream(args.hyperparam.BATCH_SIZE, args.hyperparam.NUM_CLASSES)
         # Present images them in chunks of exactly batch-size:
-        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.batch_size)
-        self.labelled        = _image_stream_batch(labelled, args.hyperparam.batch_size)
+        self.unlabelled      = _image_stream_batch(unlabelled, args.hyperparam.BATCH_SIZE)
+        self.labelled        = _image_stream_batch(labelled, args.hyperparam.BATCH_SIZE)
 
         # Use to label a discriminator batch as real
         self._label_dis_real = map(lambda a, b: a + b,
-                              _value_stream(args.hyperparam.batch_size, Y_REAL),
-                              _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.batch_size)))
+                            _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL),
+                            _function_stream(lambda: args.hyperparam.label_smoothing(True, args.hyperparam.BATCH_SIZE)))
         # Use to label a discriminator batch as fake
         self._label_dis_fake = map(lambda a, b: a + b,
-                              _value_stream(args.hyperparam.batch_size, Y_FAKE),
-                              _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.batch_size)))
+                            _value_stream(args.hyperparam.BATCH_SIZE, Y_FAKE),
+                            _function_stream(lambda: args.hyperparam.label_smoothing(False, args.hyperparam.BATCH_SIZE)))
         # Random flipping support
-        self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                self._label_dis_fake, self._label_dis_real)
-        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob],
-                                                self._label_dis_real, self._label_dis_fake)
+        self.label_dis_real = _selection_stream([args.hyperparam.label_flipping_prob], self._label_dis_fake, self._label_dis_real)
+        self.label_dis_fake = _selection_stream([args.hyperparam.label_flipping_prob], self._label_dis_real, self._label_dis_fake)
         # Use to label a generator batch as real
-        self.label_gen_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+        self.label_gen_real = _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL)
 
 class TestData(object):
-    def __init__(self, args, split):
-        assert split == "test" or split == "develop"
-        
-        num, labelled = args.data.get_data(split, args.hyperparam.batch_size)
+    def __init__(self, args, preproc):
+        num, labelled = args.data.get_data("test", args.hyperparam.BATCH_SIZE)
         logger.info("Training data loaded from disk.")
 
-        for p, np in zip(args.preprocessor, preproc_names(args)):
-            labelled   = itertools.starmap(p.apply_test, labelled)
-            logger.info("Applied test preprocessor {}.".format(np))
-
-        self.labelled = labelled
+        self.labelled = map(preproc.apply_test, labelled)
+        logger.info("Applied test preprocessor.")
+        
         self.num_labelled = num
-        self.label_dis_real = _value_stream(args.hyperparam.batch_size, Y_REAL)
+        self.label_dis_real = _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL)
 
 #
 # Accuracy metric
@@ -218,7 +225,6 @@ def _selection_stream(probs, *args):
         # into an actual value.
         yield np.choose(np.random.choice(len(ch), size=ch[0].shape, p=probs), ch)
 
-preproc_names = lambda args: [x.__name__[13:] if x.__name__[:13] == "preprocessor." else x.__name__ for x in args.preprocessor]
 
 #
 # Image handling
@@ -334,11 +340,7 @@ def argparser():
         type=dynLoadModule("preprocessor"),
         help='the name of files with image preprocessing instructions in the preprocessor package; applied in left-to-right order')
     parser.add_argument('--log-interval', default=config.LOG_INTERVAL_DEFAULT, type=int,
-        help="the number of batches between reporting results and saving weights")
-    parser.add_argument('--image-columns', default=1, type=int,
-        help="the number of columns to group produced images into")        
-    parser.add_argument('--resume', action='store_const', const=True, default=False,
-        help='attempt to load saved weights and continue training')
+        help="the interval, in seconds, at which weights are saved")
     parser.add_argument('--batches', default=config.NUM_BATCHES_DEFAULT, type=int,
         help='the last batch number to process')
 

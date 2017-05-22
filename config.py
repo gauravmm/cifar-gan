@@ -12,21 +12,11 @@ PATH = {
     "cache"   : ".cache",
 }
 
-def _WEIGHT_FILENAME(typ="*", step="*") -> str:
-    if step != "*":
-        step = "{:06d}".format(step) # Pad with leading zeros
-    return "checkpoint-{}-{}.h5".format(typ, step)
-
-def _IMAGE_FILENAME(step="*") -> str:
-    return "generated-{}.png".format(step)
-
 # Dispatch the filename call as appropriate:
 _FILENAME = {
-    'weight': _WEIGHT_FILENAME,
-     'image': _IMAGE_FILENAME, 
     'struct': lambda nm: "{}.png".format(nm),
-       'csv': lambda: "loss.csv",
-         ".": lambda: None
+         ".": lambda: None,
+"model.ckpt": lambda: "model.ckpt"
 }
 def get_filename(t, cli_args, *args):
     f = lambda x: ".".join(x.split(".")[1:])
