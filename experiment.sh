@@ -8,10 +8,11 @@ function colorize() (
 export TF_CPP_MIN_LOG_LEVEL=2
 
 colorize python3 adversarial.py  \
-    --data          cifar10[frac=1.0,shuffle]    \
+    --hyperparam    simple       \
+    --data          cifar10[frac=1.0,shuffle] \
     --preprocessor  normalize    \
     --generator     simple_model \
     --discriminator simple_model \
-    --log-interval 600           \
-    --batches 2500               \
+    --log-interval  600          \
+    --batches       2500         \
     train

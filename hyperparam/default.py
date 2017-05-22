@@ -55,6 +55,8 @@ class HaltRelativeCorrectness(object):
         self.max_step_dis = 6
         self.min_step_gen = 4
         self.max_step_gen = 12
+        self.min_step_cls = 1
+        self.max_step_cls = 3
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.
@@ -75,16 +77,16 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_gen:
             return True
-        if metrics["gen_fooling"] < self.generator_correct:
+        if metrics["gen_fooling"] > self.generator_correct:
             return True
         return False
 
     def classifier_halt(self, batch, step, metrics):
-        if step < self.min_step_gen:
+        if step < self.min_step_cls:
             return False
-        if step + 1 >= self.max_step_gen:
+        if step + 1 >= self.max_step_cls:
             return True
-        if metrics["cls_accuracy"] < self.classifier_correct:
+        if metrics["cls_accuracy"] > self.classifier_correct:
             return True
         return False
 
@@ -105,7 +107,7 @@ ENABLE_TRAINING_CLS = True
 ENABLE_TRAINING_GEN = True
 
 # If this is true, add more items to the training summaries.
-SUMMARIZE_MORE = True
+SUMMARIZE_MORE = False
 
 # Unused, but a good example:
 """

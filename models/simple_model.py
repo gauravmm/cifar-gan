@@ -14,8 +14,8 @@ def generator(inp, inp_label, output_size):
     # We only allow the discriminator model to work on CIFAR-sized data.
     assert output_size == (32, 32, 3)
 
-    init_kernel = tf.random_normal_initializer(mean=0.0, stddev=0.02)
-    init_bias = tf.random_normal_initializer(mean=1.0, stddev=0.02)
+    init_kernel = None
+    init_bias = None
 
     # [batch_size, init_z + init_label]
     x = tf.concat([tf.contrib.layers.flatten(inp), tf.contrib.layers.flatten(inp_label)], 1)
@@ -93,7 +93,7 @@ def discriminator(inp, num_classes):
                              kernel_initializer=init_kernel,
                              bias_initializer=init_bias)
 
-        y1 = tf.layers.dense(y1, 1, activation=tf.sigmoid, name="fc6")
+        y1 = tf.layers.dense(y1, 1, name="fc6")
         y1 = tf.squeeze(y1, 1, name='output_node_dis')
 
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
