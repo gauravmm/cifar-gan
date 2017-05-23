@@ -3,7 +3,7 @@
 experiments/*
 data/*.tfrecord
 data/labels.txt
-data/cifar-10-batches-py
+data/*/**
 data/cifar-10-python.tar.gz
 train_logs/**/*
 .vscode/**
