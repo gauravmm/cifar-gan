@@ -128,9 +128,6 @@ def run(args):
 
         dis_loss = dis_loss_real + dis_loss_fake
 
-        with tf.name_scope('wgan'):
-            dis_loss_wgan = dis_loss_real - dis_loss_fake
-
         # Classifier loss
         with tf.name_scope('cls'):
             with tf.name_scope('dis'):
@@ -152,12 +149,16 @@ def run(args):
             gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
                      + args.hyperparam.loss_weights_generator["classifier"]    * gen_loss_cls
             
-            with tf.name_scope('wgan'):
-                gen_loss_wgan = gen_loss_dis
-
             with tf.name_scope("fooling_rate"):
                 gen_fooling = count_fraction(tf.less(dis_output_fake_dis, 0.5))
 
+        # WGAN loss:
+        with tf.name_scope('wgan'):
+            with tf.name_scope('gen'):
+                gen_loss_wgan = tf.reduce_mean(dis_output_fake_dis)
+            with tf.name_scope('dis'):
+                dis_loss_wgan = tf.reduce_mean(dis_output_real_dis) - tf.reduce_mean(dis_output_fake_dis)
+            
 
         logger.info("Model constructed.")
 
@@ -201,7 +202,7 @@ def run(args):
     # Clipping operations for WGAN support:
     if args.hyperparam.WGAN_ENABLE:
         with tf.name_scope('wgan_ops'):
-            wgan_dis_clip = tf.group(*[v.assign(tf.clip_by_value(v, -1*args.hyperparam.WGAN_DIS_CLIP, args.hyperparam.WGAN_DIS_CLIP)) for v in discriminator_variables if "model_discriminator/classifier/" not in v.name])
+            wgan_dis_clip = tf.group(*[v.assign(tf.clip_by_value(v, -1*args.hyperparam.WGAN_DIS_CLIP, args.hyperparam.WGAN_DIS_CLIP)) for v in wgan_clipped_variables])
         
 
     with tf.name_scope('step_count'):
