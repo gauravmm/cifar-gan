@@ -32,7 +32,7 @@ class HaltWGAN(object):
     def discriminator_halt(self, batch, step, metrics):
         if batch < 25 and step < 100:
             return False
-        elif batch % 200 == 0 and step < 10:
+        elif batch % 200 == 0 and step < 100:
             return False
         else:
             return step >= 5
