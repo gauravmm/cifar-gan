@@ -8,7 +8,7 @@ function colorize() (
 export TF_CPP_MIN_LOG_LEVEL=2
 
 colorize python3 adversarial.py  \
-    --hyperparam    simple       \
+    --hyperparam    wgan         \
     --data          cifar10[frac=1.0,shuffle] \
     --preprocessor  normalize    \
     --generator     simple_model \
