@@ -58,8 +58,8 @@ def generator(inp, inp_label, output_size):
 #
 
 def discriminator(inp, num_classes):
-    init_kernel = tf.random_normal_initializer(mean=0.0, stddev=0.02)
-    init_bias = tf.random_normal_initializer(mean=1.0, stddev=0.02)
+    init_kernel = None
+    init_bias = None
 
     x = inp
 
@@ -98,7 +98,7 @@ def discriminator(inp, num_classes):
 
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
-        y2 = tf.layers.dense(x, num_classes, activation=tf.sigmoid, name='output_node_cls')
+        y2 = tf.layers.dense(x, num_classes, name='output_node_cls')
 
     # Return (discriminator, classifier)
     return (y1, y2)
