@@ -113,24 +113,20 @@ def discriminator(inp, num_classes):
 
     x = inp
 
-    x = tf.layers.dense(x, 64, name='fc1',
-                        kernel_initializer=init_kernel,
-                        bias_initializer=init_bias)
+    x = tf.layers.conv3d(x, 8, (3, 3, 3), strides=(2, 2, 2), padding="SAME", name="c2d2",
+                         activation=leakyReLu,
+                         kernel_initializer=init_kernel,
+                         bias_initializer=init_bias)
 
-    x = tf.layers.conv2d(x, 128, (3, 3), strides=(2, 2), padding="SAME", name="c2d2", 
-                                   activation=leakyReLu,
-                                   kernel_initializer=init_kernel,
-                                   bias_initializer=init_bias)
+    x = tf.layers.conv3d(x, 4, (3, 3, 3), strides=(2, 2, 2), padding="SAME", name="c2d3",
+                         activation=leakyReLu,
+                         kernel_initializer=init_kernel,
+                         bias_initializer=init_bias)
 
-    x = tf.layers.conv2d(x, 256, (3, 3), strides=(2, 2), padding="SAME", name="c2d3",
-                                   activation=leakyReLu,
-                                   kernel_initializer=init_kernel,
-                                   bias_initializer=init_bias)
-
-    x = tf.layers.conv2d(x, 512, (3, 3), strides=(2, 2), padding="SAME", name="c2d4",
-                                   activation=leakyReLu,
-                                   kernel_initializer=init_kernel,
-                                   bias_initializer=init_bias)
+    x = tf.layers.conv3d(x, 2, (3, 3, 3), strides=(2, 2, 2), padding="SAME", name="c2d4",
+                         activation=leakyReLu,
+                         kernel_initializer=init_kernel,
+                         bias_initializer=init_bias)
 
     x = tf.contrib.layers.flatten(x)
 
