@@ -6,8 +6,6 @@ import logging
 
 logger = logging.getLogger(__file__)
 
-NUM_COL = 4
-
 # Forward must be applied in np
 def apply(inp):
     """
@@ -30,16 +28,6 @@ def unapply(inp):
     """
     # We convert the 3d volume to a 2d image.
 
-    images = tf.unstack(inp, axis=3)
-    columns = []
-
-    # logger.info(inp.get_shape())
-
-    # assert (len(images) % NUM_COL) == 0
+    inp = tf.reshape(inp, [-1, 32, 32*32, 1])
     
-    for i in range(0, len(images), NUM_COL):
-        columns.append(tf.concat(images[i:(i+NUM_COL)], axis=0))
-    
-    rv = tf.concat(columns, axis=1)
-    
-    return tf.cast(rv * 255.0, tf.uint8)
+    return tf.cast(inp * 255.0, tf.uint8)
