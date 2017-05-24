@@ -42,8 +42,10 @@ def conv3d_transpose(inp, new_channels, kernel_size, strides=(1, 1, 1), activati
             
             # There are many possible output shapes that are consistent with the stride, kernel, and input size, because
             # alignment information is lost in the rounding down. We just pick the simplest possible output shape.
+            
+            # We also compute this shape for each batch, so we can (in the future) support non-uniform batch sizes.
+            output_shape = tf.stack((tf.shape(inp)[0], x*si, y*sj, z*sk, new_channels))
             # output_shape = (-1, x*si+i-1, y*sj+j-1, z*sk+k-1, new_channels)
-            output_shape = (-1, x*si, y*sj, z*sk, new_channels)
 
         elif padding == "VALID":
             raise AssertionError("Only SAME padding implemented for conv3d_transpose.")
