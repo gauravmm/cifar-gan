@@ -1,6 +1,8 @@
-# Introduction to GANs with CIFAR-100
+# Introduction to GANs
 
-This is our quick-and-dirty introduction to GANs using TensorFlow and the CIFAR-100 dataset. The aim of this is to figure out the technical challenges in semi-supervised learning and representation learning using GANs before we apply it to a a larger dataset like ImageNet.
+This is our quick-and-dirty introduction to GANs using TensorFlow.The aim of this is to figure out the technical challenges in semi-supervised learning and representation learning using GANs before we apply it to a a larger dataset like ImageNet.
+
+We support both the CIFAR-10 dataset and the LUNA16 + KDSB17 lung cancer datasets. 
 
 ## The Goal
 
