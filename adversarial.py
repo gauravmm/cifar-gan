@@ -88,7 +88,7 @@ def run(args):
     dis_class      = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
     with tf.variable_scope('model_discriminator') as disc_scope:
         # Here we prepare the multiple different batch normalization functions.
-        batch_norm = support.TFMultiFactory(tf.layers.batch_normalization, ['real_', 'fake_'], scope=disc_scope)
+        batch_norm = support.TFMultiFactory(support.BatchNormLayerFactory, ['real_', 'fake_'], scope=disc_scope)
         # Make sure that the generator and real images are the same size:
         assert str(gen_output.get_shape()) == str(dis_input.get_shape())
         dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(

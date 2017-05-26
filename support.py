@@ -21,8 +21,20 @@ from typing import Tuple
 logger = logging.getLogger()
 
 #
-# Factory
+# Batch Normalization Support
 #
+
+class BatchNormLayerFactory(object):
+    def get_layers(self, prefixes, arg):
+        """
+        Assemble multiple batch-norm layers, all sharing the same shape as necessary to work with arg.
+        The return value is a list-of-lambdas, each lambda is a tensorflow op that can be composed onto any input node.
+        The layers are returned with identical starting states, and each with the prefix corresponding to the entry in
+        prefixes.
+        """
+        args, kwargs = arg
+
+        return None
 
 class TFMultiFactoryEntry(object):
     def __init__(self, func, prefixes, name, arg, defn):
