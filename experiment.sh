@@ -8,11 +8,11 @@ function colorize() (
 export TF_CPP_MIN_LOG_LEVEL=2
 
 colorize python3 adversarial.py  \
-    --hyperparam    simple_lungcancer \
-    --data          lungcancer[frac_unlabelled=1.0,shuffle] \
-    --preprocessor  nodule_normalize  \
-    --generator     nodule_model \
-    --discriminator nodule_model \
+    --hyperparam    simple \
+    --data          cifar10 \
+    --preprocessor  normalize  \
+    --generator     simple_model \
+    --discriminator simple_model \
     --log-interval  600          \
     --batches       10000        \
     train

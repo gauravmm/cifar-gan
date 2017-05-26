@@ -70,11 +70,12 @@ def run(args):
     #
     
     global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
+    is_training = tf.placeholder(tf.bool, shape=None, name='global_is_training')
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
     gen_input_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
     with tf.variable_scope('model_generator'):
-        gen_output = args.generator.generator(gen_input_seed, gen_input_class, args.hyperparam.IMAGE_DIM)
+        gen_output = args.generator.generator(gen_input_seed, is_training, gen_input_class, args.hyperparam.IMAGE_DIM)
         
         # Sanity checking output
         if not str(gen_output.get_shape()) == _shape_str([None] + list(args.hyperparam.IMAGE_DIM)):
@@ -85,12 +86,13 @@ def run(args):
     dis_label_real = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
     dis_label_fake = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
     dis_class      = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
-    with tf.variable_scope('model_discriminator') as disc_scope:
+    with tf.variable_scope('model_discriminator'):
         # Make sure that the generator and real images are the same size:
         assert str(gen_output.get_shape()) == str(dis_input.get_shape())
-        dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, args.hyperparam.NUM_CLASSES)
-        disc_scope.reuse_variables()
-        dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, args.hyperparam.NUM_CLASSES)
+        with tf.variable_scope('real'):
+            dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, is_training, args.hyperparam.NUM_CLASSES)
+        with tf.variable_scope('fake'):
+            dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, is_training, args.hyperparam.NUM_CLASSES)
 
         # Sanity checking output
         if not str(dis_output_real_dis.get_shape()) == "(?,)" or \
@@ -282,6 +284,8 @@ def run(args):
     if not args.hyperparam.ENABLE_TRAINING_GEN:
         logger.warn("Training the generator is disabled! If this is not intentional, set `ENABLE_TRAINING_GEN = True` in your hyperparameter definition.")
 
+    logger.warn(tf.get_collection(tf.GraphKeys.UPDATE_OPS))
+
     #
     # Training
     #
@@ -325,7 +329,8 @@ def run(args):
                             gen_input_class: next(data.rand_label_vec),
                             dis_label_fake: next(data.label_dis_fake),
                             dis_input: next(data.unlabelled)[0],
-                            dis_label_real: next(data.label_dis_real)
+                            dis_label_real: next(data.label_dis_real),
+                            is_training: True
                         })
 
                         # WGANs require weight clipping.
@@ -358,7 +363,8 @@ def run(args):
                             [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
                             dis_input: data_x,
                             dis_class: data_y,
-                            dis_label_real: next(data.label_dis_real)
+                            dis_label_real: next(data.label_dis_real),
+                            is_training: True
                         })
                         step_cls += 1
                         logwriter.add_summary(summ_cls, global_step=batch)
@@ -378,7 +384,8 @@ def run(args):
                             [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
                             gen_input_seed: next(data.rand_vec),
                             gen_input_class: next(data.rand_label_vec),
-                            dis_label_real: next(data.label_gen_real)
+                            dis_label_real: next(data.label_gen_real),
+                            is_training: True
                         })
                         step_gen += 1
                         logwriter.add_summary(summ_gen, global_step=batch)
@@ -411,7 +418,7 @@ def run(args):
             for i, d in enumerate(data.labelled):
                 data_x, data_y = d
                 
-                v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x})
+                v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x, is_training: False})
                 # Update the current accuracy score
                 
                 num += v.shape[0]
