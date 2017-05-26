@@ -25,22 +25,21 @@ logger = logging.getLogger()
 #
 
 class TFMultiFactoryEntry(object):
-    def __init__(self, func, prefixes, arg, defn):
+    def __init__(self, func, prefixes, name, arg, defn):
         self.vals = []
         args, kwargs = arg
-        name = kwargs['name']
 
         for p in prefixes:
             kwargs['name'] = p + name
             self.vals.append(func(*args, **kwargs))
         
-        self.dep = defn
+        self.defn = defn
     
     def getDefinitionPlace(self):
-        return self.dep
+        return self.defn
     
-    def getVal(self, i):
-        return self.vals
+    def apply(self, i):
+        return self.vals[i]
 
 
 class TFMultiFactory(object):
@@ -51,6 +50,7 @@ class TFMultiFactory(object):
         TFMultiFactory._multifactory_idx = _multifactory_idx + 1
 
         self.idx = 0
+        self.allowCreation = True
         self.func = func
         self.prefixes = prefixes
         self.scope = scope
@@ -75,39 +75,44 @@ class TFMultiFactory(object):
     
     def __call__(self, *args, **kwargs):
         st = inspect.stack()
-        defn = "({}){}:{} ".format(st[2].function, st[2].filename, st[2].lineno)
+        defn = "({}){}:{} ".format(st[1].function, st[1].filename, st[1].lineno)
 
         # Extract the name from the args.
-        if 'name' not in kwargs:
-            kwargs['name'] = next(self.name_gen)
-            self.logger.warning("All TFMultiFactory objects should have a name. Missing name at {}, assigning \"{}\".".format(dep, kwargs['name']))
+        try:
+            name = kwargs['name']
+        except KeyError:
+            name = next(self.name_gen)
+            self.logger.warning("You should specify a name for the layer at {}, assigning \"{}\".".format(defn, name))
 
-
-        if scope.reuse:
+        if self.scope.reuse:
             # If this is the first time we're allowing reuse:
             if self.allowCreation:
+                self.logger.info("Enabled reuse")
                 # Check that we only have two prefixes. We insist on using reuse explicitly if we have more than two
                 # separate uses.
                 if len(self.prefixes) != 2:
-                    self.logger.error("Attempting to implicitly switch scope to reuse when more than two uses are expected! You must explicitly call reuse() before your call at {}.".format(dep))
+                    self.logger.error("Attempting to implicitly switch scope to reuse when more than two uses are expected! You must explicitly call reuse() before your call at {}.".format(defn))
                     raise AssertionError()
                 self.reuse()
 
-            if kwargs['name'] not in self.maps:
+            if name not in self.maps:
                 self.logger.error("All TFMultiFactory objects must be defined before .reuse() is called or the scope is switched to reuse-mode! Call at {}.".format(defn))
                 raise AssertionError()
 
             # Now we retrieve the corresponding entry:
-            self.logger.debug("Matching original {} -> reuse -> {}".format(self.maps[kwargs['name']].getDefinitionPlace(), defn))
-            return self.maps[kwargs['name']].getVal(self.idx)
+            self.logger.debug("Round {}, matching original {} -> reuse -> {}".format(self.idx, self.maps[name].getDefinitionPlace(), defn))
 
         else:            
-            if kwargs['name'] in self.maps:
-                self.logger.error("All TFMultiFactory objects must have a unique name! \"{}\" is repeated. First use in {}.".format(name, self.maps[kwargs['name']].getDefinitionPlace()))
+            if name in self.maps:
+                self.logger.error("All TFMultiFactory objects must have a unique name! \"{}\" is repeated. First use in {}.".format(name, self.maps[name].getDefinitionPlace()))
                 raise AssertionError()
 
             # Add a new entry to the maps:
-            self.vals[kwargs['name']] = TFMultiFactoryEntry(self.func, self.prefixes, (args, kwargs), defn)
+            self.maps[name] = TFMultiFactoryEntry(self.func, self.prefixes, name, (args, kwargs), defn)
+        
+        logger.info(self.maps.__repr__())
+
+        return self.maps[name].apply(self.idx)
 
 #
 # Math

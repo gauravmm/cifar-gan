@@ -98,6 +98,7 @@ def run(args):
             batch_norm=batch_norm)
 
         disc_scope.reuse_variables()
+        batch_norm.reuse()
 
         dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(
             gen_output,
