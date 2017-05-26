@@ -5,6 +5,7 @@ import errno
 import functools
 import glob
 import importlib
+import inspect
 import itertools
 import logging
 import os
@@ -18,6 +19,95 @@ from config import IMAGE_GUTTER
 from typing import Tuple
 
 logger = logging.getLogger()
+
+#
+# Factory
+#
+
+class TFMultiFactoryEntry(object):
+    def __init__(self, func, prefixes, arg, defn):
+        self.vals = []
+        args, kwargs = arg
+        name = kwargs['name']
+
+        for p in prefixes:
+            kwargs['name'] = p + name
+            self.vals.append(func(*args, **kwargs))
+        
+        self.dep = defn
+    
+    def getDefinitionPlace(self):
+        return self.dep
+    
+    def getVal(self, i):
+        return self.vals
+
+
+class TFMultiFactory(object):
+    _multifactory_idx = 0
+    def __init__(self, func, prefixes=("a_", "b_"), scope=None):
+        assert len(prefixes) == 2
+        _multifactory_idx = TFMultiFactory._multifactory_idx
+        TFMultiFactory._multifactory_idx = _multifactory_idx + 1
+
+        self.idx = 0
+        self.func = func
+        self.prefixes = prefixes
+        self.scope = scope
+        self.maps = {}
+        self.name_prefix = "multifactory" + str(_multifactory_idx)
+        self.logger = logging.getLogger('TFMultiFactory:' + str(_multifactory_idx))
+        
+        # Reset the name generator
+        self._reset_name_gen()
+    
+    def _reset_name_gen(self):
+        self.name_gen = (self.name_prefix + "_" + str(i) for i in itertools.count())
+
+    def reuse(self, i=None):
+        self.allowCreation = False
+        if i is None:
+            self.idx += 1
+        else:
+            self.idx = i
+        self._reset_name_gen()
+
+    
+    def __call__(self, *args, **kwargs):
+        st = inspect.stack()
+        defn = "({}){}:{} ".format(st[2].function, st[2].filename, st[2].lineno)
+
+        # Extract the name from the args.
+        if 'name' not in kwargs:
+            kwargs['name'] = next(self.name_gen)
+            self.logger.warning("All TFMultiFactory objects should have a name. Missing name at {}, assigning \"{}\".".format(dep, kwargs['name']))
+
+
+        if scope.reuse:
+            # If this is the first time we're allowing reuse:
+            if self.allowCreation:
+                # Check that we only have two prefixes. We insist on using reuse explicitly if we have more than two
+                # separate uses.
+                if len(self.prefixes) != 2:
+                    self.logger.error("Attempting to implicitly switch scope to reuse when more than two uses are expected! You must explicitly call reuse() before your call at {}.".format(dep))
+                    raise AssertionError()
+                self.reuse()
+
+            if kwargs['name'] not in self.maps:
+                self.logger.error("All TFMultiFactory objects must be defined before .reuse() is called or the scope is switched to reuse-mode! Call at {}.".format(defn))
+                raise AssertionError()
+
+            # Now we retrieve the corresponding entry:
+            self.logger.debug("Matching original {} -> reuse -> {}".format(self.maps[kwargs['name']].getDefinitionPlace(), defn))
+            return self.maps[kwargs['name']].getVal(self.idx)
+
+        else:            
+            if kwargs['name'] in self.maps:
+                self.logger.error("All TFMultiFactory objects must have a unique name! \"{}\" is repeated. First use in {}.".format(name, self.maps[kwargs['name']].getDefinitionPlace()))
+                raise AssertionError()
+
+            # Add a new entry to the maps:
+            self.vals[kwargs['name']] = TFMultiFactoryEntry(self.func, self.prefixes, (args, kwargs), defn)
 
 #
 # Math

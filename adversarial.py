@@ -86,13 +86,24 @@ def run(args):
     dis_label_real = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
     dis_label_fake = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
     dis_class      = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
-    with tf.variable_scope('model_discriminator'):
+    with tf.variable_scope('model_discriminator') as disc_scope:
+        # Here we prepare the multiple different batch normalization functions.
+        batch_norm = support.TFMultiFactory(tf.layers.batch_normalization, ['real_', 'fake_'], scope=disc_scope)
         # Make sure that the generator and real images are the same size:
         assert str(gen_output.get_shape()) == str(dis_input.get_shape())
-        with tf.variable_scope('real'):
-            dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(dis_input, is_training, args.hyperparam.NUM_CLASSES)
-        with tf.variable_scope('fake'):
-            dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(gen_output, is_training, args.hyperparam.NUM_CLASSES)
+        dis_output_real_dis, dis_output_real_cls = args.discriminator.discriminator(
+            dis_input,
+            is_training,
+            args.hyperparam.NUM_CLASSES,
+            batch_norm=batch_norm)
+
+        disc_scope.reuse_variables()
+
+        dis_output_fake_dis, dis_output_fake_cls = args.discriminator.discriminator(
+            gen_output,
+            is_training,
+            args.hyperparam.NUM_CLASSES,
+            batch_norm=batch_norm)
 
         # Sanity checking output
         if not str(dis_output_real_dis.get_shape()) == "(?,)" or \
