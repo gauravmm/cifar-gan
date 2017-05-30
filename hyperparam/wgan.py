@@ -22,7 +22,7 @@ optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.00005)
 label_flipping_prob = 0.0
 label_smoothing = lambda is_real, sz: 0
 
-loss_weights_generator = {'discriminator': 1.0, 'classifier': 1.0}
+loss_weights_generator = {'discriminator': 1.0, 'classifier': 0.0}
 loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 class HaltWGAN(object):
@@ -32,7 +32,7 @@ class HaltWGAN(object):
     def discriminator_halt(self, batch, step, metrics):
         if batch < 25 and step < 100:
             return False
-        elif batch % 500 == 0 and step < 100:
+        elif batch % 200 == 0 and step < 100:
             return False
         else:
             return step >= 5
@@ -51,3 +51,5 @@ classifier_halt     = _halting.classifier_halt
 ENABLE_TRAINING_DIS = True
 ENABLE_TRAINING_CLS = False
 ENABLE_TRAINING_GEN = True
+
+SUMMARIZE_MORE = False
