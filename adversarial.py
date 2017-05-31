@@ -3,8 +3,6 @@
 """
 Main CIFAR-GAN file.
 Handles the loading of data from ./data, models from ./models, training, and testing.
-
-Modified from TensorFlow-Slim examples and https://github.com/wayaai/GAN-Sandbox/
 """
 
 import datetime
