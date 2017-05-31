@@ -6,16 +6,7 @@ We support both the CIFAR-10 dataset and the LUNA16 + KDSB17 lung cancer dataset
 
 ## The Goal
 
-Our goal is to develop a semi-supervised classifier using the CIFAR dataset with restricted labels. We will:
-
-1. Train a generator-discriminator pair using the 60,000 CIFAR images _without labels_.
-2. Modify the discriminator in some way so that we can use it to extract features from the images. (e.g. we can remove the uppermost layer)
-3. Either use the features with a classical learning algorithm (nearest neighbour, random forest, etc.) or append additional layers so that we have a classifier.
-4. Train/Fine-tune the classifier on a restricted subset of CIFAR (e.g. 10%) _with labels_.
-
-Part of this project is discovering the best practices and theory behind how each of these steps works. If you have a better idea that doesn't fit in this framework, then go with the idea and disregard the framework.
-
-We are all going to report our experiments and results on the Google Sheet [here](https://docs.google.com/spreadsheets/d/1fVaBiB3TY8EiS3K_oi7miL5MGW4lD_SWG8g-FvbUUq4/edit?usp=sharing).
+Our goal is to develop a semi-supervised classifier from a lot of data without labels, and a little data with labels.
 
 ## Installation
 
