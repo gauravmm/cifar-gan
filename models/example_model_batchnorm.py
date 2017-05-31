@@ -60,6 +60,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
 def discriminator(inp, is_training, num_classes, **kwargs):
     init_kernel = None
     init_bias = None
+    batch_normalization = kwargs['batch_norm']
 
     x = inp
 
@@ -67,15 +68,21 @@ def discriminator(inp, is_training, num_classes, **kwargs):
                         kernel_initializer=init_kernel,
                         bias_initializer=init_bias)
 
+    x = batch_normalization(x, training=is_training)
+
     x = tf.layers.conv2d(x, 128, (3, 3), strides=(2, 2), padding="SAME", name="c2d2", 
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
 
+    x = batch_normalization(x, training=is_training)
+
     x = tf.layers.conv2d(x, 256, (3, 3), strides=(2, 2), padding="SAME", name="c2d3",
                                    activation=leakyReLu,
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
+
+    x = batch_normalization(x, training=is_training, name="bn4")
     
     x = tf.layers.conv2d(x, 512, (3, 3), strides=(2, 2), padding="SAME", name="c2d5",
                                    activation=leakyReLu,

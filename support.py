@@ -5,6 +5,7 @@ import errno
 import functools
 import glob
 import importlib
+import inspect
 import itertools
 import logging
 import os
@@ -18,6 +19,112 @@ from config import IMAGE_GUTTER
 from typing import Tuple
 
 logger = logging.getLogger()
+
+#
+# Batch Normalization Support
+#
+
+class BatchNormLayerFactory(object):
+    def get_layers(self, prefixes, arg):
+        """
+        Assemble multiple batch-norm layers, all sharing the same shape as necessary to work with arg.
+        The return value is a list-of-lambdas, each lambda is a tensorflow op that can be composed onto any input node.
+        The layers are returned with identical starting states, and each with the prefix corresponding to the entry in
+        prefixes.
+        """
+        args, kwargs = arg
+
+        return None
+
+class TFMultiFactoryEntry(object):
+    def __init__(self, func, prefixes, name, arg, defn):
+        self.vals = []
+        args, kwargs = arg
+
+        for p in prefixes:
+            kwargs['name'] = p + name
+            self.vals.append(func(*args, **kwargs))
+        
+        self.defn = defn
+    
+    def getDefinitionPlace(self):
+        return self.defn
+    
+    def apply(self, i):
+        return self.vals[i]
+
+
+class TFMultiFactory(object):
+    _multifactory_idx = 0
+    def __init__(self, func, prefixes=("a_", "b_"), scope=None):
+        assert len(prefixes) == 2
+        _multifactory_idx = TFMultiFactory._multifactory_idx
+        TFMultiFactory._multifactory_idx = _multifactory_idx + 1
+
+        self.idx = 0
+        self.allowCreation = True
+        self.func = func
+        self.prefixes = prefixes
+        self.scope = scope
+        self.maps = {}
+        self.name_prefix = "multifactory" + str(_multifactory_idx)
+        self.logger = logging.getLogger('TFMultiFactory:' + str(_multifactory_idx))
+        
+        # Reset the name generator
+        self._reset_name_gen()
+    
+    def _reset_name_gen(self):
+        self.name_gen = (self.name_prefix + "_" + str(i) for i in itertools.count())
+
+    def reuse(self, i=None):
+        self.allowCreation = False
+        if i is None:
+            self.idx += 1
+        else:
+            self.idx = i
+        self._reset_name_gen()
+
+    
+    def __call__(self, *args, **kwargs):
+        st = inspect.stack()
+        defn = "({}){}:{} ".format(st[1].function, st[1].filename, st[1].lineno)
+
+        # Extract the name from the args.
+        try:
+            name = kwargs['name']
+        except KeyError:
+            name = next(self.name_gen)
+            self.logger.warning("You should specify a name for the layer at {}, assigning \"{}\".".format(defn, name))
+
+        if self.scope.reuse:
+            # If this is the first time we're allowing reuse:
+            if self.allowCreation:
+                self.logger.info("Enabled reuse")
+                # Check that we only have two prefixes. We insist on using reuse explicitly if we have more than two
+                # separate uses.
+                if len(self.prefixes) != 2:
+                    self.logger.error("Attempting to implicitly switch scope to reuse when more than two uses are expected! You must explicitly call reuse() before your call at {}.".format(defn))
+                    raise AssertionError()
+                self.reuse()
+
+            if name not in self.maps:
+                self.logger.error("All TFMultiFactory objects must be defined before .reuse() is called or the scope is switched to reuse-mode! Call at {}.".format(defn))
+                raise AssertionError()
+
+            # Now we retrieve the corresponding entry:
+            self.logger.debug("Round {}, matching original {} -> reuse -> {}".format(self.idx, self.maps[name].getDefinitionPlace(), defn))
+
+        else:            
+            if name in self.maps:
+                self.logger.error("All TFMultiFactory objects must have a unique name! \"{}\" is repeated. First use in {}.".format(name, self.maps[name].getDefinitionPlace()))
+                raise AssertionError()
+
+            # Add a new entry to the maps:
+            self.maps[name] = TFMultiFactoryEntry(self.func, self.prefixes, name, (args, kwargs), defn)
+        
+        logger.info(self.maps.__repr__())
+
+        return self.maps[name].apply(self.idx)
 
 #
 # Math
