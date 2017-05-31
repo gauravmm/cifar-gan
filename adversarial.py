@@ -250,7 +250,6 @@ def run(args):
         
 
     with tf.name_scope('step_count'):
-
         log_step_dis_val = tf.placeholder(tf.int32, shape=())
         log_step_dis = tf.Variable(initial_value=0, dtype=tf.int32, trainable=False)
         log_step_dis_assign = tf.assign(log_step_dis, log_step_dis_val)
@@ -309,13 +308,22 @@ def run(args):
         tf.summary.scalar('discriminator', log_step_dis)
         tf.summary.scalar('classifier', log_step_cls)
         tf.summary.scalar('generator', log_step_gen)
+    
+    if args.hyperparam.SUMMARIZE_MORE:
+        with tf.name_scope('summary_batchnorm'):
+            tf.summary.histogram('beta', tf.concat(
+                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/beta" in v.name],
+                axis=0))
+            tf.summary.histogram('gamma', tf.concat(
+                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/gamma" in v.name],
+                axis=0))
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
     summary_dis = tf.summary.merge([v for v in summaries if "summary_discriminator/" in v.name])
     summary_cls = tf.summary.merge([v for v in summaries if "summary_classifier/" in v.name])
     summary_gen = tf.summary.merge([v for v in summaries if "summary_generator/" in v.name])
-    summary_bal = tf.summary.merge([v for v in summaries if "summary_balance/" in v.name])
+    summary_bal = tf.summary.merge([v for v in summaries if "summary_balance/" in v.name or "summary_batchnorm/" in v.name])
 
     increment_global_step = tf.assign_add(global_step, 1, name="increment_global_step")
 
