@@ -60,7 +60,7 @@ def conv3d_transpose(inp, new_channels, kernel_size, strides=(1, 1, 1), activati
 def leakyReLu(x, alpha=0.3):
     return tf.nn.relu(x) - (alpha * tf.nn.relu(-x))
 
-def generator(inp, inp_label, output_size):
+def generator(inp, is_training, inp_label, output_size, **kwargs):
     # We only allow the discriminator model to work on CIFAR-sized data.
     assert output_size == (32, 32, 32, 1)
 
@@ -109,7 +109,7 @@ def generator(inp, inp_label, output_size):
 # DISCRIMINATOR
 #
 
-def discriminator(inp, num_classes):
+def discriminator(inp, is_training, num_classes, **kwargs):
     init_kernel = None
     init_bias = None
 

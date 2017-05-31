@@ -12,7 +12,7 @@ colorize python3 adversarial.py  \
     --data          cifar10[shuffle] \
     --preprocessor  normalize  \
     --generator     simple_model \
-    --discriminator simple_model \
+    --discriminator example_model_batchnorm \
     --log-interval  600          \
     --batches       10000        \
     train
