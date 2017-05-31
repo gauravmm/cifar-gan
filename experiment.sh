@@ -7,12 +7,12 @@ function colorize() (
 # Suppress info logs
 export TF_CPP_MIN_LOG_LEVEL=2
 
-colorize python3 adversarial.py  \
-    --hyperparam    simple \
-    --data          cifar10 \
-    --preprocessor  normalize  \
-    --generator     simple_model \
-    --discriminator example_model_batchnorm \
-    --log-interval  600          \
-    --batches       10000        \
+colorize python3 adversarial.py      \
+    --hyperparam    simple           \
+    --data          cifar10[shuffle] \
+    --preprocessor  normalize        \
+    --generator     cifar_resnet     \
+    --discriminator cifar_resnet     \
+    --log-interval  600              \
+    --batches       10000            \
     train
