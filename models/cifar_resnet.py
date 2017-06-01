@@ -24,6 +24,26 @@ def _leakyReLu_impl(x, alpha):
 init_kernel = None
 init_bias = None
 
+global _bn_count
+_bn_count = 0
+# Rewrite function calls to tf.contrib.layers.batch_norm to use the semantics of tf.layers.batch_norm
+def batch_norm(*args, **kwargs):
+    global _bn_count
+
+    assert 'training' in kwargs
+    kwargs['is_training'] = kwargs['training']
+    del kwargs['training']
+
+    if 'name' in kwargs:
+        name = kwargs['name']
+        del kwargs['name']
+    else:
+        name = 'batch_norm_{}'.format(_bn_count)
+        _bn_count += 1
+
+    with tf.name_scope(name):
+        return tf.contrib.layers.batch_norm(*args, **kwargs)
+
 # Loosely based on https://github.com/dalgu90/resnet-18-tensorflow/blob/master/resnet.py
 def res_block_head(x, out_channel, strides, is_training, name="res_block_head"):
     in_channel = x.get_shape().as_list()[-1]
@@ -45,12 +65,12 @@ def _block_inner(x, shortcut, out_channel, strides, is_training):
     x = tf.layers.conv2d(x, out_channel, (3, 3), strides=(strides, strides), padding="SAME", name="conv_1",
                             kernel_initializer=init_kernel,
                             bias_initializer=init_bias)
-    x = tf.layers.batch_normalization(x, training=is_training, name='bn_1')
+    x = batch_norm(x, training=is_training, name='bn_1')
     x = leakyReLu(x)
     x = tf.layers.conv2d(x, out_channel, (3, 3), strides=1, padding="SAME", name="conv_2",
                     kernel_initializer=init_kernel,
                     bias_initializer=init_bias)
-    x = tf.layers.batch_normalization(x, training=is_training, name='bn_2')
+    x = batch_norm(x, training=is_training, name='bn_2')
     return leakyReLu(x + shortcut)
 
 
@@ -65,7 +85,7 @@ def discriminator(inp, is_training, num_classes, **kwargs):
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
 
-        x = tf.layers.batch_normalization(x, training=is_training)
+        x = batch_norm(x, training=is_training)
         x = leakyReLu(x)
         x = tf.nn.max_pool(x, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
     
@@ -129,7 +149,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
             kernel_initializer=init_kernel,
             name='tconv1')
     
-    x = tf.layers.batch_normalization(x, training=is_training, name='tconv1/batch_normalization')
+    x = batch_norm(x, training=is_training, name='tconv1/batch_normalization')
     x = leakyReLu(x, name='tconv1/relu')
         
     # Transposed convolution outputs [batch, 8, 8, 256]
@@ -137,7 +157,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
             kernel_initializer=init_kernel,
             name='tconv2')
     
-    x = tf.layers.batch_normalization(x, training=is_training, name='tconv2/batch_normalization')
+    x = batch_norm(x, training=is_training, name='tconv2/batch_normalization')
     x = leakyReLu(x, name='tconv2/relu')
         
     # Transposed convolution outputs [batch, 16, 16, 64]
@@ -145,7 +165,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
             kernel_initializer=init_kernel,
             name='tconv3')
     
-    x = tf.layers.batch_normalization(x, training=is_training, name='tconv3/batch_normalization')
+    x = batch_norm(x, training=is_training, name='tconv3/batch_normalization')
     x = leakyReLu(x, name='tconv3/relu')
         
     # Transposed convolution outputs [batch, 32, 32, 3]

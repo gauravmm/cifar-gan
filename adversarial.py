@@ -493,6 +493,7 @@ def run(args):
                 data_x, data_y = d
                 
                 v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x, is_training: False})
+                logger.debug(sess.run([v for v in tf.global_variables() if "/beta" in v.name][0]).__repr__())
                 
                 num += v.shape[0]
                 vp = np.argmax(v, axis=1)
