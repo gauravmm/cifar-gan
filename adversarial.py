@@ -481,6 +481,8 @@ def run(args):
         acc = 0.0
         k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
+        last_rep_time = time.time()
+
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
         with sv.managed_session() as sess:
             # Load weights
@@ -497,6 +499,11 @@ def run(args):
                 acc += np.sum(vp == vq)
                 for (x, y) in zip(vq, vp):
                         k[x, y] += 1.0
+                
+                new_rep_time = time.time()
+                if args.log_interval > 0 and  new_rep_time >= last_rep_time + args.log_interval:
+                    logger.info("Tested {:.1f}%, cumulative accuracy {:.1f}%.".format(float(num)/data.num_labelled*100, acc/num*100))
+                    last_rep_time += args.log_interval # Instead of setting it to the current reporting time, we add the interval. This prevents drift.
 
         # Rescale the confusion matrix    
         k = k/(np.sum(k, axis=1) + 1e-7)*100.0
