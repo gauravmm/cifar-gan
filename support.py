@@ -215,44 +215,7 @@ class TestData(object):
         self.num_labelled = num
         self.label_dis_real = _value_stream(args.hyperparam.BATCH_SIZE, Y_REAL)
 
-#
-# Accuracy metric
-#
-
-def _accuracy_metric(value):
-    # We evaluate k == value, but with only tensor operations.
-    return lambda k: 1 - K.abs(K.clip(K.round(k), 0., 1.) - value)
-
-def label_real(y_true, y_pred):
-    assert Y_REAL == 0
-    return 1 - K.round(K.clip(y_pred, 0., 1.))
-
-def label_fake(y_true, y_pred):
-    assert Y_FAKE == 1
-    return K.round(K.clip(y_pred, 0., 1.))
-
-METRICS = [label_real, label_fake, 'accuracy']
-
-def get_metric_names(com_model, dis_model_labelled, dis_model_unlabelled, gen_model):
-    logger = logging.getLogger("metric_names")
-
-    # Keras overwrites the names of metrics, so here we check that their order is as expected before creating a custom
-    # name array.
-    logger.debug("Metrics for gen_model: {}".format(gen_model.metrics_names))
-    assert gen_model.metrics_names == ['loss']
-    logger.debug("Metrics for dis_model_labelled: {}".format(dis_model_labelled.metrics_names))
-    assert dis_model_labelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'discriminator_acc', 'classifier_label_real', 'classifier_label_fake', 'classifier_acc']
-    logger.debug("Metrics for dis_model_unlabelled: {}".format(dis_model_unlabelled.metrics_names))
-    assert dis_model_unlabelled.metrics_names == ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'discriminator_acc', 'classifier_label_real', 'classifier_label_fake', 'classifier_acc']
-    logger.debug("Metrics for com_model: {}".format(com_model.metrics_names))
-    assert com_model.metrics_names == ['loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_loss', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake', 'model_discriminator_unlabelled_acc', 'model_discriminator_unlabelled_label_real', 'model_discriminator_unlabelled_label_fake', 'model_discriminator_unlabelled_acc']
-    
-    # Custom name array.
-    return ['loss', 'discriminator_loss', 'classifier_loss', 'discriminator_label_real', 'discriminator_label_fake', 'discriminator_acc', 'classifier_label_real', 'classifier_label_fake', 'classifier_acc']
-
-# TODO: Support reading test data.
-
-# A generator that enforces the batch-size of the input. Used to feed keras the right amount of data even with data 
+# A generator that enforces the batch-size of the input. Used to feed TensorFlow the right amount of data even with data
 # augmentation increasing the batch size.
 def _image_stream_batch(itr, batch_size):
     rx, ry = next(itr)
@@ -332,86 +295,6 @@ def _selection_stream(probs, *args):
         # into an actual value.
         yield np.choose(np.random.choice(len(ch), size=ch[0].shape, p=probs), ch)
 
-
-#
-# Image handling
-#
-
-def arrange_images(img_data, args):
-    num, rw, cl, ch = img_data.shape
-    cols = args.image_columns
-    rows = num // args.image_columns
-
-    rv = np.empty((rows * (rw + IMAGE_GUTTER) - IMAGE_GUTTER, cols * (cl + IMAGE_GUTTER) - IMAGE_GUTTER, ch), dtype=np.uint8)
-    rv[...] = 255
-
-    for i in range(rows):
-        for j in range(cols):
-            rv[i*(rw + IMAGE_GUTTER):i*(rw + IMAGE_GUTTER) + rw,
-               j*(cl + IMAGE_GUTTER):j*(cl + IMAGE_GUTTER) + cl,:] = img_data[i * cols + j,...]
-    
-    return rv
-
-#
-# Filesystem
-#
-
-def _get_latest_glob(blob):
-    """
-    Returns the file that matches blob (with a single wildcard), that has the highest numeric value in the wildcard.
-    """
-    assert len(list(filter(lambda x: x == "*", blob))) == 1 # There should only be one wildcard in blob
-    
-    blobs = glob.glob(blob)
-    if not len(blobs):
-        raise Exception("Cannot file file matching {}".format(blob))
-    
-    ltrunc = blob.index("*")           # Number of left characters to remove
-    rtrunc = -(len(blob) - ltrunc - 1) # Number of right characters to remove
-    
-    # Get the indices hidden behind the wildcard
-    idx = [int(b[ltrunc:rtrunc]) for b in blobs]
-    return sorted(zip(idx, blobs), reverse=True)[0]
-
-def _make_path(path):
-    try:
-        os.makedirs(path)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
-
-def resume(args, gen_model, dis_model):
-    try:
-        # Load files as necessary
-        gen_num, gen_fn = _get_latest_glob(config.get_filename('weight', args, 'gen'))
-        dis_num, dis_fn = _get_latest_glob(config.get_filename('weight', args, 'dis'))
-
-        # Check if the files are from the same batch.
-        assert gen_num == dis_num
-
-        gen_model.load_weights(gen_fn, by_name=True)
-        logger.info("Loaded generator weights from {}".format(gen_fn))
-        dis_model.load_weights(dis_fn, by_name=True)
-        logger.info("Loaded discriminator weights from {}".format(dis_fn))
-
-        return gen_num
-
-    except Exception as e:
-        logger.warn("Exception: {}".format(e))
-        logger.debug(sys.exc_info())
-        return None
-
-def clear(args):
-    _make_path(config.get_filename('.', args))
-
-    # Delete old weight checkpoints
-    for f in itertools.chain(glob.glob(os.path.join(config.get_filename('.', args), "*"))):
-        logger.debug("Deleting file {}".format(f))
-        os.remove(f)
-    logger.info("Deleted all saved weights and images for generator \"{}\" and discriminator \"{}\".".format(args.generator.NAME, args.discriminator.NAME))
-
-    return 0
-
 #
 # CLI
 #
@@ -450,7 +333,7 @@ def argparser():
         help="the interval, in seconds, at which weights are saved")
     parser.add_argument('--batches', default=config.NUM_BATCHES_DEFAULT, type=int,
         help='the last batch number to process')
-
+    
     parser.add_argument('--data',
         type=dynLoadModule("data"),
         help='the name of a file in the data package, used to specify the dataset loader')
@@ -462,7 +345,9 @@ def argparser():
         help='name of the file containing the generator model definition')
     parser.add_argument('--discriminator', required=True,
         type=dynLoadModule("models"),
-        help='name of the file containing the discrimintator model definition')
+        help='name of the file containing the discriminator model definition')
+    parser.add_argument('--only-classifier-after', default=-1, type=int,
+        help='only train the classifier, starting from this batch number')
     
     parser.add_argument("split", choices=["train", "test"])
 

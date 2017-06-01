@@ -358,6 +358,8 @@ def run(args):
             logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
             logger.info("Starting training from batch {} to {}. Saving model every {}s.".format(batch, args.batches, args.log_interval))
 
+            only_classifier = False
+
             # Format the score printing
             while not sv.should_stop():
                 if batch >= args.batches:
@@ -368,13 +370,24 @@ def run(args):
 
                 if batch % 100 == 0:
                     logger.debug('Step {} of {}.'.format(batch, args.batches))
+                
+                if args.only_classifier_after > 0:
+                    if batch >= args.only_classifier_after:
+                        # Make sure the classifier is enabled
+                        if not args.hyperparam.ENABLE_TRAINING_CLS:
+                            logger.error("Argument --only-classifier-after specified when classifier disabled in hyperparameter definition.")
+                            raise AssertionError
+                        # Disable the 
+                        if not only_classifier:
+                            logger.warn("Starting from batch {}, only the classifier will be trained.".format(batch))
+                            only_classifier = True
 
                 # This training proceeds in two phases: (1) discriminator, then (2) generator.
                 # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
                 # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
                 # distinguish between "fake"" (generated) and real images by running it on one step of each.                
                 step_dis = 0
-                if args.hyperparam.ENABLE_TRAINING_DIS:
+                if args.hyperparam.ENABLE_TRAINING_DIS and not only_classifier:
                     while True:
                         # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
                         # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
@@ -434,7 +447,7 @@ def run(args):
                 # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
                 # vector, it classifies images as real.
                 step_gen = 0
-                if args.hyperparam.ENABLE_TRAINING_GEN:
+                if args.hyperparam.ENABLE_TRAINING_GEN and not only_classifier:
                     while True:
                         _, loss, fooling_rate, summ_gen = sess.run(
                             [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
