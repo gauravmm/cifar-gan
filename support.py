@@ -333,7 +333,7 @@ def argparser():
         help="the interval, in seconds, at which weights are saved")
     parser.add_argument('--batches', default=config.NUM_BATCHES_DEFAULT, type=int,
         help='the last batch number to process')
-    
+
     parser.add_argument('--data',
         type=dynLoadModule("data"),
         help='the name of a file in the data package, used to specify the dataset loader')
