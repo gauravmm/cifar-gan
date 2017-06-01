@@ -14,15 +14,6 @@ colorize python3 adversarial.py      \
     --generator     cifar_resnet     \
     --discriminator cifar_resnet     \
     --log-interval  600              \
-    --batches       100              \
-    --only-classifier-after 20       \
+    --batches       3000             \
+    --only-classifier-after 2000     \
     train
-
-colorize python3 adversarial.py      \
-    --hyperparam    simple           \
-    --data          cifar10[shuffle] \
-    --preprocessor  normalize        \
-    --generator     cifar_resnet     \
-    --discriminator cifar_resnet     \
-    --log-interval  10               \
-    test
