@@ -86,7 +86,7 @@ def _wrap_update_ops(op, *args, **kwargs):
     _wrapped_ops = _wrapped_ops.union(new_ops)
 
     # We force the new dependencies:
-    with tf.control_dependencies([tf.group(*new_ops)]):
+    with tf.control_dependencies(new_ops):
         return _deep_identity(rv)
 
 _shape_str = lambda a: "(" + ", ".join("?" if b is None else str(b) for b in a) + ")"
