@@ -349,7 +349,9 @@ def run(args):
         logger = logging.getLogger("train")
         data = support.TrainData(args, preproc)
 
+        logger.info("Loading weights from disk.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
+
         with sv.managed_session() as sess:
             # Set up tensorboard logging:
             logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
@@ -475,22 +477,22 @@ def run(args):
         logger = logging.getLogger("test")
         data = support.TestData(args, preproc)
         
-        logger.info("Starting tests.")
-        
         num = 0
         acc = 0.0
         k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
+        logger.info("Loading weights from disk.")
+        sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
+
+        logger.info("Starting tests.")
         last_rep_time = time.time()
 
-        sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
         with sv.managed_session() as sess:
             # Load weights
             for i, d in enumerate(data.labelled):
                 data_x, data_y = d
                 
                 v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x, is_training: False})
-                # Update the current accuracy score
                 
                 num += v.shape[0]
                 vp = np.argmax(v, axis=1)
