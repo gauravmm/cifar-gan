@@ -11,11 +11,11 @@ BATCH_SIZE   = 64
 LABELLED_FRACTION = 0.10
 WGAN_ENABLE = False
 
-optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
+optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002)
 
-label_flipping_prob = 0.1
+label_flipping_prob = 0.15
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
 
 loss_weights_generator = {'discriminator': 1.0, 'classifier': 0.0}
