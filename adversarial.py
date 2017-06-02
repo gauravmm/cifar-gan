@@ -336,11 +336,13 @@ def run(args):
 
     # Check for unattached UPDATE_OPS:
     remaining_ops = set(tf.get_collection(tf.GraphKeys.UPDATE_OPS)) - _wrapped_ops
-    if len(remaining_ops):
+    if not _wrapped_ops and not remaining_ops:
+        logger.warn("No UPDATE_OPS found, and so there is nothing to attach to the graph.".format(remaining_ops.__repr__()))
+    if remaining_ops:
         logger.warn("Some UPDATE_OPS are not attached to nodes in the Graph, and will not automatically execute: {}".format(remaining_ops.__repr__()))
         logger.debug(remaining_ops.__repr__())
     else:
-        logger.info("All UPDATE_OPS attached to the Graph.")
+        logger.info("All {} UPDATE_OPS attached to the Graph.".format(len(_wrapped_ops)))
 
     #
     # Training
@@ -349,9 +351,9 @@ def run(args):
         logger = logging.getLogger("train")
         data = support.TrainData(args, preproc)
 
-        logger.info("Loading weights from disk.")
+        logger.info("Loading supervisor.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
-
+        
         with sv.managed_session() as sess:
             # Set up tensorboard logging:
             logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
@@ -481,7 +483,7 @@ def run(args):
         acc = 0.0
         k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
-        logger.info("Loading weights from disk.")
+        logger.info("Loading supervisor.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
 
         logger.info("Starting tests.")
