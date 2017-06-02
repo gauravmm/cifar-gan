@@ -317,6 +317,12 @@ def run(args):
             tf.summary.histogram('gamma', tf.concat(
                 [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/gamma" in v.name],
                 axis=0))
+            tf.summary.histogram('moving_mean', tf.concat(
+                [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/moving_mean" in v.name],
+                axis=0))
+            tf.summary.histogram('moving_variance', tf.concat(
+                [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/moving_variance" in v.name],
+                axis=0))
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
