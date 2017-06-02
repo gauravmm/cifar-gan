@@ -58,7 +58,7 @@ def main(args):
 
 def _deep_identity(rv):
     if type(rv) is list or type(rv) is tuple:
-        return map(lambda x: _deep_identity(x), rv)
+        return tuple([_deep_identity(x) for x in rv])
     else:
         return tf.identity(rv)
 
@@ -86,7 +86,7 @@ def _wrap_update_ops(op, *args, **kwargs):
     _wrapped_ops = _wrapped_ops.union(new_ops)
 
     # We force the new dependencies:
-    with tf.control_dependencies([tf.group(*new_ops)]):
+    with tf.control_dependencies(new_ops):
         return _deep_identity(rv)
 
 _shape_str = lambda a: "(" + ", ".join("?" if b is None else str(b) for b in a) + ")"
@@ -311,12 +311,12 @@ def run(args):
     
     if args.hyperparam.SUMMARIZE_MORE:
         with tf.name_scope('summary_batchnorm'):
-            tf.summary.histogram('beta', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/beta" in v.name],
-                axis=0))
-            tf.summary.histogram('gamma', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/gamma" in v.name],
-                axis=0))
+            for md in ["model_generator", "model_discriminator"]:
+                with tf.name_scope(md):
+                    for hi in ["beta", "gamma", "moving_mean", "moving_variance"]:
+                        tf.summary.histogram(hi, tf.concat(
+                            [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/" + hi in v.name and md + "/" in v.name],
+                            axis=0))
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
@@ -336,11 +336,13 @@ def run(args):
 
     # Check for unattached UPDATE_OPS:
     remaining_ops = set(tf.get_collection(tf.GraphKeys.UPDATE_OPS)) - _wrapped_ops
-    if len(remaining_ops):
+    if not _wrapped_ops and not remaining_ops:
+        logger.warn("No UPDATE_OPS found, and so there is nothing to attach to the graph.".format(remaining_ops.__repr__()))
+    if remaining_ops:
         logger.warn("Some UPDATE_OPS are not attached to nodes in the Graph, and will not automatically execute: {}".format(remaining_ops.__repr__()))
         logger.debug(remaining_ops.__repr__())
     else:
-        logger.info("All UPDATE_OPS attached to the Graph.")
+        logger.info("All {} UPDATE_OPS attached to the Graph.".format(len(_wrapped_ops)))
 
     #
     # Training
@@ -349,9 +351,9 @@ def run(args):
         logger = logging.getLogger("train")
         data = support.TrainData(args, preproc)
 
-        logger.info("Loading weights from disk.")
+        logger.info("Loading supervisor.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
-
+        
         with sv.managed_session() as sess:
             # Set up tensorboard logging:
             logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
@@ -481,7 +483,7 @@ def run(args):
         acc = 0.0
         k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
-        logger.info("Loading weights from disk.")
+        logger.info("Loading supervisor.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
 
         logger.info("Starting tests.")
