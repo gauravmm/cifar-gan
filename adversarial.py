@@ -58,7 +58,7 @@ def main(args):
 
 def _deep_identity(rv):
     if type(rv) is list or type(rv) is tuple:
-        return map(lambda x: _deep_identity(x), rv)
+        return tuple([_deep_identity(x) for x in rv])
     else:
         return tf.identity(rv)
 
@@ -86,7 +86,7 @@ def _wrap_update_ops(op, *args, **kwargs):
     _wrapped_ops = _wrapped_ops.union(new_ops)
 
     # We force the new dependencies:
-    with tf.control_dependencies([tf.group(*new_ops)]):
+    with tf.control_dependencies(new_ops):
         return _deep_identity(rv)
 
 _shape_str = lambda a: "(" + ", ".join("?" if b is None else str(b) for b in a) + ")"
@@ -311,12 +311,12 @@ def run(args):
     
     if args.hyperparam.SUMMARIZE_MORE:
         with tf.name_scope('summary_batchnorm'):
-            tf.summary.histogram('beta', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/beta" in v.name],
-                axis=0))
-            tf.summary.histogram('gamma', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/gamma" in v.name],
-                axis=0))
+            for md in ["model_generator", "model_discriminator"]:
+                with tf.name_scope(md):
+                    for hi in ["beta", "gamma", "moving_mean", "moving_variance"]:
+                        tf.summary.histogram(hi, tf.concat(
+                            [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/" + hi in v.name and md + "/" in v.name],
+                            axis=0))
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
@@ -336,11 +336,13 @@ def run(args):
 
     # Check for unattached UPDATE_OPS:
     remaining_ops = set(tf.get_collection(tf.GraphKeys.UPDATE_OPS)) - _wrapped_ops
-    if len(remaining_ops):
+    if not _wrapped_ops and not remaining_ops:
+        logger.warn("No UPDATE_OPS found, and so there is nothing to attach to the graph.".format(remaining_ops.__repr__()))
+    if remaining_ops:
         logger.warn("Some UPDATE_OPS are not attached to nodes in the Graph, and will not automatically execute: {}".format(remaining_ops.__repr__()))
         logger.debug(remaining_ops.__repr__())
     else:
-        logger.info("All UPDATE_OPS attached to the Graph.")
+        logger.info("All {} UPDATE_OPS attached to the Graph.".format(len(_wrapped_ops)))
 
     #
     # Training
@@ -349,7 +351,9 @@ def run(args):
         logger = logging.getLogger("train")
         data = support.TrainData(args, preproc)
 
+        logger.info("Loading supervisor.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
+        
         with sv.managed_session() as sess:
             # Set up tensorboard logging:
             logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
@@ -357,6 +361,8 @@ def run(args):
             batch = sess.run(global_step)
             logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
             logger.info("Starting training from batch {} to {}. Saving model every {}s.".format(batch, args.batches, args.log_interval))
+
+            only_classifier = False
 
             # Format the score printing
             while not sv.should_stop():
@@ -368,13 +374,24 @@ def run(args):
 
                 if batch % 100 == 0:
                     logger.debug('Step {} of {}.'.format(batch, args.batches))
+                
+                if args.only_classifier_after > 0:
+                    if batch >= args.only_classifier_after:
+                        # Make sure the classifier is enabled
+                        if not args.hyperparam.ENABLE_TRAINING_CLS:
+                            logger.error("Argument --only-classifier-after specified when classifier disabled in hyperparameter definition.")
+                            raise AssertionError
+                        # Disable the 
+                        if not only_classifier:
+                            logger.warn("Starting from batch {}, only the classifier will be trained.".format(batch))
+                            only_classifier = True
 
                 # This training proceeds in two phases: (1) discriminator, then (2) generator.
                 # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
                 # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
                 # distinguish between "fake"" (generated) and real images by running it on one step of each.                
                 step_dis = 0
-                if args.hyperparam.ENABLE_TRAINING_DIS:
+                if args.hyperparam.ENABLE_TRAINING_DIS and not only_classifier:
                     while True:
                         # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
                         # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
@@ -434,7 +451,7 @@ def run(args):
                 # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
                 # vector, it classifies images as real.
                 step_gen = 0
-                if args.hyperparam.ENABLE_TRAINING_GEN:
+                if args.hyperparam.ENABLE_TRAINING_GEN and not only_classifier:
                     while True:
                         _, loss, fooling_rate, summ_gen = sess.run(
                             [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
@@ -462,20 +479,22 @@ def run(args):
         logger = logging.getLogger("test")
         data = support.TestData(args, preproc)
         
-        logger.info("Starting tests.")
-        
         num = 0
         acc = 0.0
         k = np.zeros((args.hyperparam.NUM_CLASSES, args.hyperparam.NUM_CLASSES))
 
+        logger.info("Loading supervisor.")
         sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=0)
+
+        logger.info("Starting tests.")
+        last_rep_time = time.time()
+
         with sv.managed_session() as sess:
             # Load weights
             for i, d in enumerate(data.labelled):
                 data_x, data_y = d
                 
                 v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x, is_training: False})
-                # Update the current accuracy score
                 
                 num += v.shape[0]
                 vp = np.argmax(v, axis=1)
@@ -484,6 +503,11 @@ def run(args):
                 acc += np.sum(vp == vq)
                 for (x, y) in zip(vq, vp):
                         k[x, y] += 1.0
+                
+                new_rep_time = time.time()
+                if args.log_interval > 0 and  new_rep_time >= last_rep_time + args.log_interval:
+                    logger.info("Tested {:.1f}%, cumulative accuracy {:.1f}%.".format(float(num)/data.num_labelled*100, acc/num*100))
+                    last_rep_time += args.log_interval # Instead of setting it to the current reporting time, we add the interval. This prevents drift.
 
         # Rescale the confusion matrix    
         k = k/(np.sum(k, axis=1) + 1e-7)*100.0
