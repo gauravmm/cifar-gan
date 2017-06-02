@@ -58,7 +58,7 @@ def main(args):
 
 def _deep_identity(rv):
     if type(rv) is list or type(rv) is tuple:
-        return map(lambda x: _deep_identity(x), rv)
+        return tuple([_deep_identity(x) for x in rv])
     else:
         return tf.identity(rv)
 
@@ -86,7 +86,7 @@ def _wrap_update_ops(op, *args, **kwargs):
     _wrapped_ops = _wrapped_ops.union(new_ops)
 
     # We force the new dependencies:
-    with tf.control_dependencies([tf.group(*new_ops)]):
+    with tf.control_dependencies(new_ops):
         return _deep_identity(rv)
 
 _shape_str = lambda a: "(" + ", ".join("?" if b is None else str(b) for b in a) + ")"
@@ -311,18 +311,12 @@ def run(args):
     
     if args.hyperparam.SUMMARIZE_MORE:
         with tf.name_scope('summary_batchnorm'):
-            tf.summary.histogram('beta', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/beta" in v.name],
-                axis=0))
-            tf.summary.histogram('gamma', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES) if "/gamma" in v.name],
-                axis=0))
-            tf.summary.histogram('moving_mean', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/moving_mean" in v.name],
-                axis=0))
-            tf.summary.histogram('moving_variance', tf.concat(
-                [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/moving_variance" in v.name],
-                axis=0))
+            for md in ["model_generator", "model_discriminator"]:
+                with tf.name_scope(md):
+                    for hi in ["beta", "gamma", "moving_mean", "moving_variance"]:
+                        tf.summary.histogram(hi, tf.concat(
+                            [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/" + hi in v.name and md + "/" in v.name],
+                            axis=0))
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
