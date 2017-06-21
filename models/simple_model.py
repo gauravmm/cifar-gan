@@ -7,7 +7,7 @@ import tensorflow as tf
 # GENERATOR
 #
 
-def leakyReLu(x, alpha=0.3):
+def leakyReLu(x, alpha=0.2):
     return tf.nn.relu(x) - (alpha * tf.nn.relu(-x))
 
 def generator(inp, is_training, inp_label, output_size, **kwargs):
