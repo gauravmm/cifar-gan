@@ -81,6 +81,7 @@ class HaltRelativeCorrectness(object):
             return True
         return False
 
+    # classifier_halt is also called when step=0, because the classifier may not have to be run every batch.
     def classifier_halt(self, batch, step, metrics):
         if step < self.min_step_cls:
             return False

@@ -430,8 +430,21 @@ def run(args):
                         logger.error("    4) Wait for Gaurav to do (3).")
                         
                         raise RuntimeError('Training classifier with WGAN is unsupported.')
-                    while True:
-                        data_x, data_y = next(data.labelled)
+                    
+                    data_x, data_y = next(data.labelled)
+                    loss_label, accuracy, summ_cls = sess.run(
+                            [cls_loss, cls_accuracy, summary_cls], feed_dict={
+                            dis_input: data_x,
+                            dis_class: data_y,
+                            dis_label_real: next(data.label_dis_real),
+                            is_training: True
+                        })
+                    logwriter.add_summary(summ_cls, global_step=batch)
+
+                    while not args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
+                        if step_cls > 0:
+                            data_x, data_y = next(data.labelled)
+
                         _, loss_label, accuracy, summ_cls = sess.run(
                             [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
                             dis_input: data_x,
@@ -441,10 +454,6 @@ def run(args):
                         })
                         step_cls += 1
                         logwriter.add_summary(summ_cls, global_step=batch)
-                        
-                        if args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
-                            break
-                
 
                 # Finally, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
                 # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
