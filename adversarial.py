@@ -441,8 +441,8 @@ def run(args):
                         })
                     logwriter.add_summary(summ_cls, global_step=batch)
 
-                    while args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
-                        if step_cls == 0:
+                    while not args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
+                        if step_cls > 0:
                             data_x, data_y = next(data.labelled)
 
                         _, loss_label, accuracy, summ_cls = sess.run(
