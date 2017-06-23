@@ -8,7 +8,7 @@ SEED_DIM = (32,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
 BATCH_SIZE   = 16
-LABELLED_FRACTION = 0.2
+LABELLED_FRACTION = 0.05
 WGAN_ENABLE = False
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
