@@ -16,5 +16,5 @@ colorize python3 adversarial.py      \
     --log-interval  60               \
     --batches       12000             \
     --only-classifier-after 12000        \
-    train
+    test
 
