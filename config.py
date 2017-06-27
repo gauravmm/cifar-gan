@@ -8,7 +8,7 @@ NUM_BATCHES_DEFAULT = 5000
 PATH = {
     "__main__": os.path.dirname(os.path.abspath(__file__)),
     "log"     : "experiment.log",
-    "output"  : "train_logs_3_8th",
+    "output"  : "train_logs_5_9th",
     "cache"   : ".cache",
 }
 

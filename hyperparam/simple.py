@@ -8,7 +8,7 @@ SEED_DIM = (32,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
 BATCH_SIZE   = 16
-LABELLED_FRACTION = 0.05
+LABELLED_FRACTION = 0.1
 WGAN_ENABLE = False
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
@@ -26,13 +26,14 @@ class HaltRelativeCorrectness(object):
     def __init__(self):
         self.discriminator_correct = 0.81
         self.generator_correct = 0.61
-        self.classifier_correct = 0.90
+        self.classifier_min_correct = 0.85
+        self.classifier_max_correct = 0.98
         self.min_step_dis = 1
         self.max_step_dis = 50
         self.min_step_gen = 1
         self.max_step_gen = 50
-        self.min_step_cls = 1
-        self.max_step_cls = 50
+        self.min_step_cls = 0
+        self.max_step_cls = 10
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.
@@ -62,8 +63,10 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_cls:
             return True
-        if metrics["cls_accuracy"] < self.classifier_correct:
+        if metrics["cls_accuracy"] < self.classifier_min_correct:
             return False
+        if metrics["cls_accuracy"] > self.classifier_max_correct:
+            return True
         return True
 
 
