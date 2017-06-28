@@ -22,6 +22,9 @@ WGAN_ENABLE = False
 # In the training step of a WGAN, the discriminator weights will be clipped to (-WGAN_DIS_CLIP, WGAN_DIS_CLIP).
 # If WGAN_ENABLE is False, this parameter is not required.
 WGAN_DIS_CLIP = 0.01
+# To enable an additional l2-loss on the magnitude of all trainable weights, set this to a non-zero number. This is added
+# to all losses. This will not work with WGANs.
+WEIGHT_DECAY - 0.01
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)

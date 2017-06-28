@@ -218,6 +218,25 @@ def run(args):
         wgan_clipped_variables  =  [v for v in discriminator_variables if "model_discriminator/classifier/" not in v.name]
         logger.debug("WGAN Clipped Variables:\n\t{}".format(",\n\t".join(v.name for v in wgan_clipped_variables)))
 
+    dis_loss_regularized = dis_loss
+    cls_loss_regularized = cls_loss
+    gen_loss_regularized = gen_loss
+    all_weights = 0
+    if args.hyperparam.WEIGHT_DECAY > 0:
+        if args.hyperparam.WGAN_ENABLE:
+            logger.error("WGAN mode enabled, and weight decay is non-zero. This has been disabled until someone (i.e. you) sit down, work through the math, and make sure this won't blow up in our faces.")
+            raise AssertionError
+        
+        # We add the l2-norm of the weights to this:
+        # all_weights is used to draw a histogram later.
+        all_weights = tf.concat([tf.reshape(v, [-1]) for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)], axis=0)
+        _weight_decay_regularizer = tf.reduce_sum(tf.square(all_weights))/2*args.hyperparam.WEIGHT_DECAY
+        
+        dis_loss_regularized += _weight_decay_regularizer
+        cls_loss_regularized += _weight_decay_regularizer
+        gen_loss_regularized += _weight_decay_regularizer
+        
+
     # Train ops
     with tf.name_scope('train_ops'):
         # These operations may be used in the future. For now, a combined train_dis handles the discriminator training
@@ -227,11 +246,11 @@ def run(args):
         #                    minimize(dis_loss_real, var_list=discriminator_variables)
 
         train_dis = args.hyperparam.optimizer_dis. \
-                            minimize(dis_loss, var_list=discriminator_variables)
+                            minimize(dis_loss_regularized, var_list=discriminator_variables)
         train_cls = args.hyperparam.optimizer_cls. \
-                            minimize(cls_loss, var_list=discriminator_variables)
+                            minimize(cls_loss_regularized, var_list=discriminator_variables)
         train_gen = args.hyperparam.optimizer_gen. \
-                            minimize(gen_loss, var_list=generator_variables)
+                            minimize(gen_loss_regularized, var_list=generator_variables)
         
         if args.hyperparam.WGAN_ENABLE:
             logger.info("Building WGAN optimizer.")
@@ -317,13 +336,18 @@ def run(args):
                         tf.summary.histogram(hi, tf.concat(
                             [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/" + hi in v.name and md + "/" in v.name],
                             axis=0))
+        if args.hyperparam.WEIGHT_DECAY > 0:
+            with tf.name_scope('summary_weightdecay'):
+                tf.summary.histogram('weights', all_weights)
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
     summary_dis = tf.summary.merge([v for v in summaries if "summary_discriminator/" in v.name])
     summary_cls = tf.summary.merge([v for v in summaries if "summary_classifier/" in v.name])
     summary_gen = tf.summary.merge([v for v in summaries if "summary_generator/" in v.name])
-    summary_bal = tf.summary.merge([v for v in summaries if "summary_balance/" in v.name or "summary_batchnorm/" in v.name])
+    summary_bal = tf.summary.merge([v for v in summaries if "summary_balance/" in v.name
+                                                         or "summary_batchnorm/" in v.name
+                                                         or "summary_weightdecay/" in v.name])
 
     increment_global_step = tf.assign_add(global_step, 1, name="increment_global_step")
 
@@ -381,7 +405,7 @@ def run(args):
                         if not args.hyperparam.ENABLE_TRAINING_CLS:
                             logger.error("Argument --only-classifier-after specified when classifier disabled in hyperparameter definition.")
                             raise AssertionError
-                        # Disable the 
+                        # Disable the classifier
                         if not only_classifier:
                             logger.warn("Starting from batch {}, only the classifier will be trained.".format(batch))
                             only_classifier = True
