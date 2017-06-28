@@ -228,8 +228,9 @@ def run(args):
             raise AssertionError
         
         # We add the l2-norm of the weights to this:
-        all_weights = tf.concat([tf.contrib.layers.flatten(v) for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)], axis=0)
-        _weight_decay_regularizer = tf.sum(tf.square(all_weights))/2*args.hyperparam.WEIGHT_DECAY
+        # all_weights is used to draw a histogram later.
+        all_weights = tf.concat([tf.reshape(v, [-1]) for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)], axis=0)
+        _weight_decay_regularizer = tf.reduce_sum(tf.square(all_weights))/2*args.hyperparam.WEIGHT_DECAY
         
         dis_loss_regularized += _weight_decay_regularizer
         cls_loss_regularized += _weight_decay_regularizer
