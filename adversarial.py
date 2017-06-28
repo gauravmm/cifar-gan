@@ -317,13 +317,18 @@ def run(args):
                         tf.summary.histogram(hi, tf.concat(
                             [v for v in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES) if "/" + hi in v.name and md + "/" in v.name],
                             axis=0))
+        if args.hyperparam.WEIGHT_DECAY > 0:
+            with tf.name_scope('summary_weightdecay'):
+                tf.summary.histogram('weights', tf.concat([tf.contrib.layers.flatten(v) for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)], axis=0))
 
     # Summary operations:
     summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
     summary_dis = tf.summary.merge([v for v in summaries if "summary_discriminator/" in v.name])
     summary_cls = tf.summary.merge([v for v in summaries if "summary_classifier/" in v.name])
     summary_gen = tf.summary.merge([v for v in summaries if "summary_generator/" in v.name])
-    summary_bal = tf.summary.merge([v for v in summaries if "summary_balance/" in v.name or "summary_batchnorm/" in v.name])
+    summary_bal = tf.summary.merge([v for v in summaries if "summary_balance/" in v.name
+                                                         or "summary_batchnorm/" in v.name
+                                                         or "summary_weightdecay/" in v.name])
 
     increment_global_step = tf.assign_add(global_step, 1, name="increment_global_step")
 
@@ -381,7 +386,7 @@ def run(args):
                         if not args.hyperparam.ENABLE_TRAINING_CLS:
                             logger.error("Argument --only-classifier-after specified when classifier disabled in hyperparameter definition.")
                             raise AssertionError
-                        # Disable the 
+                        # Disable the classifier
                         if not only_classifier:
                             logger.warn("Starting from batch {}, only the classifier will be trained.".format(batch))
                             only_classifier = True
