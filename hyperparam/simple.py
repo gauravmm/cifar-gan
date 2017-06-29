@@ -7,14 +7,14 @@ from support import MovingAverage
 SEED_DIM = (32,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
-BATCH_SIZE   = 64
-LABELLED_FRACTION = 0.10
+BATCH_SIZE   = 16
+LABELLED_FRACTION = 0.1
 WGAN_ENABLE = False
 WEIGHT_DECAY = 0.01
 
-optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.002)
+optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002, momentum=0.5)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002, momentum=0.5)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002, momentum=0.5)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
@@ -25,15 +25,15 @@ loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
-        self.discriminator_correct = 0.51
-        self.generator_correct = 0.51
-        self.classifier_correct = 0.3
+        self.discriminator_correct = 0.81
+        self.generator_correct = 0.61
+        self.classifier_correct = 0.85
         self.min_step_dis = 1
-        self.max_step_dis = 6
-        self.min_step_gen = 4
-        self.max_step_gen = 12
-        self.min_step_cls = 1
-        self.max_step_cls = 3
+        self.max_step_dis = 50
+        self.min_step_gen = 1
+        self.max_step_gen = 50
+        self.min_step_cls = 0
+        self.max_step_cls = 10
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.

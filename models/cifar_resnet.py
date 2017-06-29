@@ -105,7 +105,8 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
-        y2 = tf.layers.dense(x, num_classes, name='output_node_cls')
+        y2 = tf.layers.dropout(x,rate=0.5,training=is_training)
+        y2 = tf.layers.dense(y2, num_classes, name='output_node_cls')
 
     # Return (discriminator, classifier)
     return (y1, y2)

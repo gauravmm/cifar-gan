@@ -14,6 +14,6 @@ colorize python3 adversarial.py      \
     --generator     cifar_resnet     \
     --discriminator cifar_resnet     \
     --log-interval  600              \
-    --batches       3000             \
-    --only-classifier-after 2000     \
+    --batches       10000            \
+    --only-classifier-after 8000     \
     train
