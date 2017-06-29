@@ -24,7 +24,7 @@ WGAN_ENABLE = False
 WGAN_DIS_CLIP = 0.01
 # To enable an additional l2-loss on the magnitude of all trainable weights, set this to a non-zero number. This is added
 # to all losses. This will not work with WGANs.
-WEIGHT_DECAY - 0.01
+WEIGHT_DECAY = 0.01
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
