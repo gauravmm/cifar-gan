@@ -10,6 +10,7 @@ NUM_CLASSES = 10
 BATCH_SIZE   = 64
 LABELLED_FRACTION = 0.10
 WGAN_ENABLE = False
+WEIGHT_DECAY = 0.01
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.002)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.002)
