@@ -8,12 +8,12 @@ SEED_DIM = (32,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
 BATCH_SIZE   = 16
-LABELLED_FRACTION = 0.1
+LABELLED_FRACTION = 0.08
 WGAN_ENABLE = False
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.01,momentum=0.9)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
@@ -27,13 +27,13 @@ class HaltRelativeCorrectness(object):
         self.discriminator_correct = 0.81
         self.generator_correct = 0.61
         self.classifier_min_correct = 0.85
-        self.classifier_max_correct = 0.98
+        self.classifier_max_correct = 0.95
         self.min_step_dis = 1
         self.max_step_dis = 50
         self.min_step_gen = 1
         self.max_step_gen = 50
-        self.min_step_cls = 0
-        self.max_step_cls = 10
+        self.min_step_cls = 1
+        self.max_step_cls = 1
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.
@@ -76,9 +76,9 @@ discriminator_halt  = _halting.discriminator_halt
 generator_halt      = _halting.generator_halt
 classifier_halt     = _halting.classifier_halt
 
-ENABLE_TRAINING_DIS = True
+ENABLE_TRAINING_DIS = False
 ENABLE_TRAINING_CLS = True
-ENABLE_TRAINING_GEN = True
+ENABLE_TRAINING_GEN = False
 
 # If this is true, add more items to the training summaries.
 SUMMARIZE_MORE = False

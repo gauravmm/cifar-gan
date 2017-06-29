@@ -12,9 +12,9 @@ colorize python3 adversarial.py      \
     --data          cifar10[shuffle] \
     --preprocessor  normalize        \
     --generator     cifar_resnet     \
-    --discriminator cifar_resnet     \
+    --discriminator cifar_resnet_original     \
     --log-interval  60               \
-    --batches       12000             \
-    --only-classifier-after 8000       \
-    train
+    --batches       30000              \
+    --only-classifier-after 0        \
+    test
 
