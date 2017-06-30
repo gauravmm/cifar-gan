@@ -89,11 +89,13 @@ def discriminator(inp, is_training, num_classes, **kwargs):
     
     x = tf.layers.average_pooling2d(x,8,4)
 
-
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
     with tf.variable_scope('discriminator'):
+        # with tf.variable_scope('conv6_dis'):
+        #     y1 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
+        #     y1 = res_block(y1, is_training=is_training, name='conv6_2')  
         x = tf.contrib.layers.flatten(x)
         y1 = tf.layers.dense(x, 64, name='fc6',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
         y1 = tf.layers.dense(y1, 1, name="fc7")
@@ -101,6 +103,12 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
+        # with tf.variable_scope('conv6_cls'):
+        #     y2 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
+        #     y2 = res_block(y2, is_training=is_training, name='conv6_2') 
+        # y2 = tf.contrib.layers.flatten(y2)
+        # y2 = tf.layers.dense(y2, 128, name='fc8',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
+        # y2 = tf.layers.dropout(x,rate=0.5,training=is_training)
         y2 = tf.layers.dense(x, num_classes, name='output_node_cls')
 
     # Return (discriminator, classifier)
