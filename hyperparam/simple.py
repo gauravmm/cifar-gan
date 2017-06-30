@@ -7,14 +7,23 @@ from support import MovingAverage
 SEED_DIM = (32,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
-BATCH_SIZE   = 16
-LABELLED_FRACTION = 0.08
+BATCH_SIZE   = 128
+LABELLED_FRACTION = 0.05
 WGAN_ENABLE = False
-WEIGHT_DECAY = 0.01
+WEIGHT_DECAY = 0.0001
+
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.01,momentum=0.9)
+
+# #learning-rate adapting to the dataset size and decaying over time
+# global_step = tf.Variable(0, trainable=False)
+# batches_per_epoch = int((NUM_CLASSES*5000*LABELLED_FRACTION)/BATCH_SIZE)
+# values = [1*(LABELLED_FRACTION/1000),1*(LABELLED_FRACTION/10000),1*(LABELLED_FRACTION/100000)]
+# boundaries = [batches_per_epoch*80,batches_per_epoch*120]
+# lr = tf.train.piecewise_constant(global_step, boundaries, values)
+
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0001,momentum=0.9)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
@@ -25,14 +34,14 @@ loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
-        self.discriminator_correct = 0.81
-        self.generator_correct = 0.61
-        self.classifier_min_correct = 0.85
-        self.classifier_max_correct = 0.95
+        self.discriminator_correct = 0.51
+        self.generator_correct = 0.51
+        self.classifier_min_correct = 0.9
+        self.classifier_max_correct = 0.98
         self.min_step_dis = 1
-        self.max_step_dis = 50
+        self.max_step_dis = 1
         self.min_step_gen = 1
-        self.max_step_gen = 50
+        self.max_step_gen = 1
         self.min_step_cls = 1
         self.max_step_cls = 1
 
@@ -77,9 +86,9 @@ discriminator_halt  = _halting.discriminator_halt
 generator_halt      = _halting.generator_halt
 classifier_halt     = _halting.classifier_halt
 
-ENABLE_TRAINING_DIS = False
+ENABLE_TRAINING_DIS = True
 ENABLE_TRAINING_CLS = True
-ENABLE_TRAINING_GEN = False
+ENABLE_TRAINING_GEN = True
 
 # If this is true, add more items to the training summaries.
 SUMMARIZE_MORE = False

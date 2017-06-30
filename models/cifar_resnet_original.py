@@ -1,5 +1,5 @@
 """
-A simple model, containing both generator and discriminator.
+The original ResNet-20 model for the discriminator, and a symmetrical generator..
 """
 import logging
 
@@ -93,23 +93,23 @@ def discriminator(inp, is_training, num_classes, **kwargs):
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
     with tf.variable_scope('discriminator'):
-        # with tf.variable_scope('conv6_dis'):
-        #     y1 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
-        #     y1 = res_block(y1, is_training=is_training, name='conv6_2')  
-        x = tf.contrib.layers.flatten(x)
-        y1 = tf.layers.dense(x, 64, name='fc6',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
+        with tf.variable_scope('conv6_dis'):
+            y1 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
+            y1 = res_block(y1, is_training=is_training, name='conv6_2')  
+        y1 = tf.contrib.layers.flatten(y1)
+        y1 = tf.layers.dense(y1, 64, name='fc6',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
         y1 = tf.layers.dense(y1, 1, name="fc7")
         y1 = tf.squeeze(y1, 1, name='output_node_dis')
 
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
-        # with tf.variable_scope('conv6_cls'):
-        #     y2 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
-        #     y2 = res_block(y2, is_training=is_training, name='conv6_2') 
-        # y2 = tf.contrib.layers.flatten(y2)
-        # y2 = tf.layers.dense(y2, 128, name='fc8',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
-        # y2 = tf.layers.dropout(x,rate=0.5,training=is_training)
-        y2 = tf.layers.dense(x, num_classes, name='output_node_cls')
+        with tf.variable_scope('conv6_cls'):
+            y2 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
+            y2 = res_block(y2, is_training=is_training, name='conv6_2') 
+        y2 = tf.contrib.layers.flatten(y2)
+        y2 = tf.layers.dense(y2, 128, name='fc8',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
+        y2 = tf.layers.dropout(y2,rate=0.5,training=is_training)
+        y2 = tf.layers.dense(y2, num_classes, name='output_node_cls')
 
     # Return (discriminator, classifier)
     return (y1, y2)
@@ -128,24 +128,24 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
     # [batch_size, 1, 1, init_*]
     x = tf.expand_dims(tf.expand_dims(x, 1), 1)
 
-    # Transposed convolution outputs [batch, 4, 4, 1024]
-    x = tf.layers.conv2d_transpose(x, 1024, 4, padding='valid',
+    # Transposed convolution outputs [batch, 8, 8, 64]
+    x = tf.layers.conv2d_transpose(x, 64, 8, padding='valid',
             kernel_initializer=init_kernel,
             name='tconv1')
     
     x = tf.layers.batch_normalization(x, training=is_training, name='tconv1/batch_normalization')
     x = leakyReLu(x, name='tconv1/relu')
         
-    # Transposed convolution outputs [batch, 8, 8, 256]
-    x = tf.layers.conv2d_transpose(x, 256, 4, 2, padding='same',
+    # Transposed convolution outputs [batch, 16, 16, 32]
+    x = tf.layers.conv2d_transpose(x, 32, 4, 2, padding='same',
             kernel_initializer=init_kernel,
             name='tconv2')
     
     x = tf.layers.batch_normalization(x, training=is_training, name='tconv2/batch_normalization')
     x = leakyReLu(x, name='tconv2/relu')
         
-    # Transposed convolution outputs [batch, 16, 16, 64]
-    x = tf.layers.conv2d_transpose(x, 64, 4, 2, padding='same',
+    # Transposed convolution outputs [batch, 32, 32, 64]
+    x = tf.layers.conv2d_transpose(x, 16, 4, 2, padding='same',
             kernel_initializer=init_kernel,
             name='tconv3')
     
@@ -153,7 +153,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
     x = leakyReLu(x, name='tconv3/relu')
         
     # Transposed convolution outputs [batch, 32, 32, 3]
-    x = tf.layers.conv2d_transpose(x, 3, 4, 2, padding='same',
+    x = tf.layers.conv2d_transpose(x, 3, 4, 1, padding='same',
             kernel_initializer=init_kernel,
             name='tconv4')
     x = tf.tanh(x, name='tconv4/tanh')
