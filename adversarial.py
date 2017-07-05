@@ -222,11 +222,11 @@ def run(args):
     cls_loss_regularized = cls_loss
     gen_loss_regularized = gen_loss
 
-    def _weight_decay_regularizer(*args):
+    def _weight_decay_regularizer(*patterns):
         """Return a weighted L2-norm by pattern matching variable names against weights."""
         _weight_list = []
         for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
-            for pattern, weight in args:
+            for pattern, weight in patterns:
                 if pattern in v.name:
                     _weight_list.append(v * weight)
                     break
@@ -247,12 +247,12 @@ def run(args):
         dis_loss_regularized += all_weights
         cls_loss_regularized += _weight_decay_regularizer(
             ("model_discriminator/discriminator/", args.hyperparam.loss_weights_classifier["discriminator"]),
-            ("model_discriminator/generator/", args.hyperparam.loss_weights_classifier["generator"]),
-            ("model_discriminator/", args.hyperparam.loss_weights_classifier["discriminator"] + args.hyperparam.loss_weights_classifier["generator"]))
+            ("model_discriminator/classifier/", args.hyperparam.loss_weights_classifier["classifier"]),
+            ("model_discriminator/", args.hyperparam.loss_weights_classifier["discriminator"] + args.hyperparam.loss_weights_classifier["classifier"]))
         gen_loss_regularized += _weight_decay_regularizer(
             ("model_discriminator/discriminator/", args.hyperparam.loss_weights_generator["discriminator"]),
-            ("model_discriminator/generator/", args.hyperparam.loss_weights_generator["generator"]),
-            ("model_discriminator/", args.hyperparam.loss_weights_generator["discriminator"] + args.hyperparam.loss_weights_generator["generator"]))
+            ("model_discriminator/classifier/", args.hyperparam.loss_weights_generator["classifier"]),
+            ("model_discriminator/", args.hyperparam.loss_weights_generator["discriminator"] + args.hyperparam.loss_weights_generator["classifier"]))
 
     # Train ops
     with tf.name_scope('train_ops'):
