@@ -221,7 +221,22 @@ def run(args):
     dis_loss_regularized = dis_loss
     cls_loss_regularized = cls_loss
     gen_loss_regularized = gen_loss
-    all_weights = 0
+
+    def _weight_decay_regularizer(*patterns):
+        """Return a weighted L2-norm by pattern matching variable names against weights."""
+        _weight_list = []
+        for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES):
+            for pattern, weight in patterns:
+                if pattern in v.name:
+                    _weight_list.append(v * weight)
+                    break
+            else:
+                _weight_list.append(v)
+
+        return tf.reduce_sum(tf.square(tf.concat([tf.reshape(v, [-1]) for v in _weight_list], axis=0)))/2*args.hyperparam.WEIGHT_DECAY
+
+
+    all_weights = _weight_decay_regularizer()
     if args.hyperparam.WEIGHT_DECAY > 0:
         if args.hyperparam.WGAN_ENABLE:
             logger.error("WGAN mode enabled, and weight decay is non-zero. This has been disabled until someone (i.e. you) sit down, work through the math, and make sure this won't blow up in our faces.")
@@ -229,13 +244,15 @@ def run(args):
         
         # We add the l2-norm of the weights to this:
         # all_weights is used to draw a histogram later.
-        all_weights = tf.concat([tf.reshape(v, [-1]) for v in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)], axis=0)
-        _weight_decay_regularizer = tf.reduce_sum(tf.square(all_weights))/2*args.hyperparam.WEIGHT_DECAY
-        
-        dis_loss_regularized += _weight_decay_regularizer
-        cls_loss_regularized += _weight_decay_regularizer
-        gen_loss_regularized += _weight_decay_regularizer
-        
+        dis_loss_regularized += all_weights
+        cls_loss_regularized += _weight_decay_regularizer(
+            ("model_discriminator/discriminator/", args.hyperparam.loss_weights_classifier["discriminator"]),
+            ("model_discriminator/classifier/", args.hyperparam.loss_weights_classifier["classifier"]),
+            ("model_discriminator/", args.hyperparam.loss_weights_classifier["discriminator"] + args.hyperparam.loss_weights_classifier["classifier"]))
+        gen_loss_regularized += _weight_decay_regularizer(
+            ("model_discriminator/discriminator/", args.hyperparam.loss_weights_generator["discriminator"]),
+            ("model_discriminator/classifier/", args.hyperparam.loss_weights_generator["classifier"]),
+            ("model_discriminator/", args.hyperparam.loss_weights_generator["discriminator"] + args.hyperparam.loss_weights_generator["classifier"]))
 
     # Train ops
     with tf.name_scope('train_ops'):
