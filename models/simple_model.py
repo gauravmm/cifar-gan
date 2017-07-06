@@ -50,7 +50,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
                                 kernel_initializer=init_kernel,
                                 bias_initializer=init_bias)
 
-    return x
+    return (x+1)/2
 
 
 #
