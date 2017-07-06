@@ -12,7 +12,7 @@ colorize python3 adversarial.py      \
     --data          cifar10[shuffle] \
     --preprocessor  normalize        \
     --generator     cifar_resnet     \
-    --discriminator cifar_resnet_original_classifier  \
+    --discriminator cifar_resnet  \
     --log-interval  60               \
     --batches      3500            \
     --only-classifier-after 3125      \
