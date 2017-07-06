@@ -21,8 +21,8 @@ def _leakyReLu_impl(x, alpha):
 # GENERATOR
 #
 
-init_kernel = None
-init_bias = None
+init_kernel = tf.contrib.layers.variance_scaling_initializer()
+init_bias = tf.zeros_initializer()
 
 # Loosely based on https://github.com/dalgu90/resnet-18-tensorflow/blob/master/resnet.py
 def res_block_head(x, out_channel, strides, is_training, name="res_block_head"):
@@ -67,7 +67,6 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 
         x = tf.layers.batch_normalization(x, training=is_training)
         x = leakyReLu(x)
-        #x = tf.nn.max_pool(x, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
     
     # conv2_x
     with tf.variable_scope('conv2'):
@@ -87,7 +86,6 @@ def discriminator(inp, is_training, num_classes, **kwargs):
         x = res_block(x, is_training=is_training, name='conv4_2')
         x = res_block(x, is_training=is_training, name='conv4_3')
     
-    x = tf.layers.average_pooling2d(x,8,4)
 
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
@@ -96,8 +94,9 @@ def discriminator(inp, is_training, num_classes, **kwargs):
         with tf.variable_scope('conv6_dis'):
             y1 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
             y1 = res_block(y1, is_training=is_training, name='conv6_2')  
+        y1 = tf.layers.average_pooling2d(y1,8,4)
         y1 = tf.contrib.layers.flatten(y1)
-        y1 = tf.layers.dense(y1, 64, name='fc6',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
+        y1 = tf.layers.dense(y1, 32, name='fc6',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
         y1 = tf.layers.dense(y1, 1, name="fc7")
         y1 = tf.squeeze(y1, 1, name='output_node_dis')
 
@@ -106,6 +105,7 @@ def discriminator(inp, is_training, num_classes, **kwargs):
         with tf.variable_scope('conv6_cls'):
             y2 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
             y2 = res_block(y2, is_training=is_training, name='conv6_2') 
+        y2 = tf.layers.average_pooling2d(y2,8,4)
         y2 = tf.contrib.layers.flatten(y2)
         y2 = tf.layers.dense(y2, 128, name='fc8',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
         y2 = tf.layers.dropout(y2,rate=0.5,training=is_training)
@@ -118,6 +118,7 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 #
 # GENERATOR
 #
+#generator symmetrical
 def generator(inp, is_training, inp_label, output_size, **kwargs):
     # We only allow the discriminator model to work on CIFAR-sized data.
     assert output_size == (32, 32, 3)
@@ -125,37 +126,88 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
     # [batch_size, init_z + init_label]
     x = tf.concat([tf.contrib.layers.flatten(inp), tf.contrib.layers.flatten(inp_label)], 1)
 
+    x = tf.layers.dense(x, 8*8*32, name='fc0',activation=tf.nn.relu,kernel_initializer=init_kernel,bias_initializer=init_bias)
+
     # [batch_size, 1, 1, init_*]
     x = tf.expand_dims(tf.expand_dims(x, 1), 1)
 
     # Transposed convolution outputs [batch, 8, 8, 64]
-    x = tf.layers.conv2d_transpose(x, 64, 8, padding='valid',
+    x = tf.layers.conv2d_transpose(x, 512, 8, padding='valid',
             kernel_initializer=init_kernel,
-            name='tconv1')
-    
+            name='tconv1')    
     x = tf.layers.batch_normalization(x, training=is_training, name='tconv1/batch_normalization')
     x = leakyReLu(x, name='tconv1/relu')
-        
+
+    with tf.variable_scope('conv7'):
+        x = tf.layers.conv2d(x, 512, (3,3), strides=1, padding = "SAME", name='conv7-1')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv7-1/batch_normalization')
+        x = tf.nn.relu(x, name='conv7-1/relu')
+        x = tf.layers.conv2d(x, 512, (3,3), strides=1, padding = "SAME", name='conv7-2')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv7-2/batch_normalization')
+        x = tf.nn.relu(x, name='conv7-2/relu')
+        x = tf.layers.conv2d(x, 256, (3,3), strides=1, padding = "SAME", name='conv7-3')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv7-3/batch_normalization')
+        x = tf.nn.relu(x, name='conv7-3/relu')       
+        x = tf.layers.conv2d(x, 256, (3,3), strides=1, padding = "SAME", name='conv7-4')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv7-4/batch_normalization')
+        x = tf.nn.relu(x, name='conv7-4/relu')
+        x = tf.layers.conv2d(x, 256, (3,3), strides=1, padding = "SAME", name='conv7-5')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv7-5/batch_normalization')
+        x = tf.nn.relu(x, name='conv7-5/relu')   
+
     # Transposed convolution outputs [batch, 16, 16, 32]
-    x = tf.layers.conv2d_transpose(x, 32, 4, 2, padding='same',
+    x = tf.layers.conv2d_transpose(x, 128, 4, 2, padding='same',
             kernel_initializer=init_kernel,
-            name='tconv2')
-    
+            name='tconv2')  
     x = tf.layers.batch_normalization(x, training=is_training, name='tconv2/batch_normalization')
     x = leakyReLu(x, name='tconv2/relu')
-        
-    # Transposed convolution outputs [batch, 32, 32, 64]
-    x = tf.layers.conv2d_transpose(x, 16, 4, 2, padding='same',
+
+    with tf.variable_scope('conv8'):
+        x = tf.layers.conv2d(x, 128, (3,3), strides=1, padding = "SAME", name='conv8-1')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv8-1/batch_normalization')
+        x = tf.nn.relu(x, name='conv8-1/relu')
+        x = tf.layers.conv2d(x, 128, (3,3), strides=1, padding = "SAME", name='conv8-2')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv8-2/batch_normalization')
+        x = tf.nn.relu(x, name='conv8-2/relu')
+        x = tf.layers.conv2d(x, 64, (3,3), strides=1, padding = "SAME", name='conv8-3')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv8-3/batch_normalization')
+        x = tf.nn.relu(x, name='conv8-3/relu')       
+        x = tf.layers.conv2d(x, 64, (3,3), strides=1, padding = "SAME", name='conv8-4')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv8-4/batch_normalization')
+        x = tf.nn.relu(x, name='conv8-4/relu')
+        x = tf.layers.conv2d(x, 64, (3,3), strides=1, padding = "SAME", name='conv8-5')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv8-5/batch_normalization')
+        x = tf.nn.relu(x, name='conv8-5/relu')  
+
+    # Transposed convolution outputs [batch, 32, 32, 16]
+    x = tf.layers.conv2d_transpose(x, 32, 4, 2, padding='same',
             kernel_initializer=init_kernel,
-            name='tconv3')
-    
+            name='tconv3')   
     x = tf.layers.batch_normalization(x, training=is_training, name='tconv3/batch_normalization')
     x = leakyReLu(x, name='tconv3/relu')
-        
+
+    with tf.variable_scope('conv9'):
+        x = tf.layers.conv2d(x, 32, (3,3), strides=1, padding = "SAME", name='conv9-1')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv9-1/batch_normalization')
+        x = tf.nn.relu(x, name='conv9-1/relu')
+        x = tf.layers.conv2d(x, 32, (3,3), strides=1, padding = "SAME", name='conv9-2')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv9-2/batch_normalization')
+        x = tf.nn.relu(x, name='conv9-2/relu')
+        x = tf.layers.conv2d(x, 16, (3,3), strides=1, padding = "SAME", name='conv9-3')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv9-3/batch_normalization')
+        x = tf.nn.relu(x, name='conv9-3/relu')       
+        x = tf.layers.conv2d(x, 16, (3,3), strides=1, padding = "SAME", name='conv9-4')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv9-4/batch_normalization')
+        x = tf.nn.relu(x, name='conv9-4/relu')
+        x = tf.layers.conv2d(x, 16, (3,3), strides=1, padding = "SAME", name='conv9-5')
+        x = tf.layers.batch_normalization(x, training=is_training, name='conv9-5/batch_normalization')
+        x = tf.nn.relu(x, name='conv9-5/relu')  
+
     # Transposed convolution outputs [batch, 32, 32, 3]
-    x = tf.layers.conv2d_transpose(x, 3, 4, 1, padding='same',
+    x = tf.layers.conv2d(x, 3, (3,3), 1, padding='same',
             kernel_initializer=init_kernel,
             name='tconv4')
-    x = tf.tanh(x, name='tconv4/tanh')
+    x = (tf.tanh(x, name='tconv4/tanh')+1)/2
 
     return x
+
