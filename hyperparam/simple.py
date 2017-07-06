@@ -16,13 +16,6 @@ WEIGHT_DECAY = 0.0001
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
 optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
 
-# #learning-rate adapting to the dataset size and decaying over time
-# global_step = tf.Variable(0, trainable=False)
-# batches_per_epoch = int((NUM_CLASSES*5000*LABELLED_FRACTION)/BATCH_SIZE)
-# values = [1*(LABELLED_FRACTION/1000),1*(LABELLED_FRACTION/10000),1*(LABELLED_FRACTION/100000)]
-# boundaries = [batches_per_epoch*80,batches_per_epoch*120]
-# lr = tf.train.piecewise_constant(global_step, boundaries, values)
-
 optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0001,momentum=0.9)
 
 label_flipping_prob = 0.1
