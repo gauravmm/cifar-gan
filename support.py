@@ -241,7 +241,8 @@ def _random_1hot_stream(batch_size : int, num_class):
     while True:
         z = np.zeros((batch_size, num_class))
         q = np.random.randint(num_class, size=(batch_size,))
-        z[:,q] = 1
+        for i in range(batch_size):
+            z[i, q[i]] = 1
         yield z
 
 # Produces a stream of random data
