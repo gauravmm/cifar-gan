@@ -99,7 +99,7 @@ def run(args):
     # Build Model
     #
     
-    global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
+    global_step = tf.get_variable("global_step",shape=())
     is_training = tf.placeholder(tf.bool, shape=None, name='global_is_training')
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
