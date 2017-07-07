@@ -2,6 +2,7 @@
 A simple model, containing both generator and discriminator.
 """
 import logging
+import numpy as np
 
 import tensorflow as tf
 
@@ -54,6 +55,22 @@ def _block_inner(x, shortcut, out_channel, strides, is_training):
     return leakyReLu(x + shortcut)
 
 
+
+def minibatch_disrimination(x, dim1, dim2, training=True, name='minibatch_discrimination'):
+    input_dim = x.get_shape().as_list()[0]
+    with tf.variable_scope(name):
+        T = tf.get_variable('T', shape=[128,dim1,dim2], dtype=tf.float32, 
+                            initializer=init_kernel, 
+                            trainable=True)
+        matrices = tf.multiply(T,x)
+        sigma_xi_1 = tf.reduce_sum(tf.exp(-tf.reduce_mean(tf.abs(matrices[i][1,:]-matrices[:][1,:]))))
+        sigma_x = tf.zeros(shape=[128,512+512])
+        for i in range(128):
+            sigma_xi = tf.reduce_sum(tf.exp(-tf.reduce_mean(tf.abs(matrices[i][:,:]-matrices[:][:,:]),axis=2)), axis=1)
+        batch_x = tf.concat([x,sigma_x],1)
+        return batch_x
+
+
 #
 # DISCRIMINATOR
 #
@@ -90,6 +107,8 @@ def discriminator(inp, is_training, num_classes, **kwargs):
         x = res_block(x, is_training=is_training, name='conv5_2')
     
     x = tf.contrib.layers.flatten(x)
+
+    x = minibatch_disrimination(x, 512, 512, training=is_training, name='minibatch_discrimination')
 
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include

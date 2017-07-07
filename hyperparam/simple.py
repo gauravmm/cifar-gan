@@ -10,7 +10,7 @@ NUM_CLASSES = 10
 BATCH_SIZE   = 128
 LABELLED_FRACTION = 0.1
 WGAN_ENABLE = False
-WEIGHT_DECAY = 0.0001
+WEIGHT_DECAY = 0.000025
 
 
 optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
@@ -25,7 +25,7 @@ boundaries = [batches_per_epoch*80,batches_per_epoch*120]
 lr = tf.train.piecewise_constant(global_step, boundaries, values)
 
 #you can choose to put learning_rate=lr to use the adaptive learning rate schedule defined above
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.001,momentum=0.9)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.9)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
