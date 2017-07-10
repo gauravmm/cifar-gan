@@ -54,22 +54,25 @@ def _block_inner(x, shortcut, out_channel, strides, is_training):
     x = tf.layers.batch_normalization(x, training=is_training, name='bn_2')
     return leakyReLu(x + shortcut)
 
+#the inner minibatch operation
+def sigma(M):
+    return tf.reduce_sum(tf.exp(-tf.reduce_mean(tf.abs(M[:,:,:]-M[:,:,:]), axis=2)), axis=1, keep_dims=True)
 
+#matmul only supports 2D-matrix multiplication, I adapt it to 3D
+def tensor_vector_multiplication(T,x):
+    slices = []
+    for i in range(T.get_shape().as_list()[0]):
+        slices.append(tf.matmul(x,T[i,:,:]))
+    return tf.stack(slices,axis=1)
 
-def minibatch_disrimination(x, dim1, dim2, training=True, name='minibatch_discrimination'):
-    input_dim = x.get_shape().as_list()[0]
+#minibatch discrimination, based on OpenAI
+def minibatch_disrimination(x, dim1, dim2, dim3, training=True, name='minibatch_discrimination'):
     with tf.variable_scope(name):
-        T = tf.get_variable('T', shape=[128,dim1,dim2], dtype=tf.float32, 
-                            initializer=init_kernel, 
-                            trainable=True)
-        matrices = tf.multiply(T,x)
-        sigma_xi_1 = tf.reduce_sum(tf.exp(-tf.reduce_mean(tf.abs(matrices[i][1,:]-matrices[:][1,:]))))
-        sigma_x = tf.zeros(shape=[128,512+512])
-        for i in range(128):
-            sigma_xi = tf.reduce_sum(tf.exp(-tf.reduce_mean(tf.abs(matrices[i][:,:]-matrices[:][:,:]),axis=2)), axis=1)
+        T = tf.get_variable('T', [dim1,dim2,dim3], tf.float32, tf.random_normal_initializer(mean = 0.001,stddev=0.02))
+        matrices = tensor_vector_multiplication(T,x)
+        sigma_x = sigma(matrices)
         batch_x = tf.concat([x,sigma_x],1)
         return batch_x
-
 
 #
 # DISCRIMINATOR
@@ -108,7 +111,8 @@ def discriminator(inp, is_training, num_classes, **kwargs):
     
     x = tf.contrib.layers.flatten(x)
 
-    x = minibatch_disrimination(x, 512, 512, training=is_training, name='minibatch_discrimination')
+    #the 3 dimensions of the tensor must be the same as the input data dimension
+    x = minibatch_disrimination(x, 512, 512, 512, training=is_training, name='minibatch_discrimination')
 
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
