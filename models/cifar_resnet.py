@@ -61,8 +61,8 @@ def sigma(M):
 #matmul only supports 2D-matrix multiplication, I adapt it to 3D
 def tensor_vector_multiplication(T,x):
     slices = []
-    for i in range(T.get_shape().as_list()[0]):
-        slices.append(tf.matmul(x,T[i,:,:]))
+    for i in range(T.get_shape().as_list()[2]):
+        slices.append(tf.matmul(x,T[:,:,i]))
     return tf.stack(slices,axis=1)
 
 #minibatch discrimination, based on OpenAI
@@ -96,29 +96,30 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 
     # conv3_x
     with tf.variable_scope('conv3'):
-        x = res_block_head(x, 128, 2, is_training=is_training, name='conv3_1')
+        x = res_block_head(x, 64, 2, is_training=is_training, name='conv3_1')
         x = res_block(x, is_training=is_training, name='conv3_2')
     
     # conv4_x
     with tf.variable_scope('conv4'):
-        x = res_block_head(x, 256, 2, is_training=is_training, name='conv4_1')
+        x = res_block_head(x, 128, 2, is_training=is_training, name='conv4_1')
         x = res_block(x, is_training=is_training, name='conv4_2')
 
     # conv5_x
     with tf.variable_scope('conv5'):
-        x = res_block_head(x, 512, 2, is_training=is_training, name='conv5_1')
+        x = res_block_head(x, 256, 2, is_training=is_training, name='conv5_1')
         x = res_block(x, is_training=is_training, name='conv5_2')
     
     x = tf.contrib.layers.flatten(x)
 
-    #the 3 dimensions of the tensor must be the same as the input data dimension
-    x = minibatch_disrimination(x, 512, 512, 512, training=is_training, name='minibatch_discrimination')
+    #the 1st dimension of the tensor must be the same as the input data dimension
+    with tf.variable_scope('minibatch_discrimination'):
+        x = minibatch_disrimination(x, 256, 32, 32, training=is_training, name='minibatch_discrimination_1')
 
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
     with tf.variable_scope('discriminator'):
-        y1 = tf.layers.dense(x, 16, name='fc6',
+        y1 = tf.layers.dense(x, 32, name='fc6',
                              activation=leakyReLu,
                              kernel_initializer=init_kernel,
                              bias_initializer=init_bias)

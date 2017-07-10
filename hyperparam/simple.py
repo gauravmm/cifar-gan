@@ -41,11 +41,11 @@ class HaltRelativeCorrectness(object):
         self.classifier_min_correct = 0.9
         self.classifier_max_correct = 0.98
         self.min_step_dis = 1
-        self.max_step_dis = 50
+        self.max_step_dis = 1
         self.min_step_gen = 1
-        self.max_step_gen = 50
-        self.min_step_cls = 0
-        self.max_step_cls = 10
+        self.max_step_gen = 1
+        self.min_step_cls = 1
+        self.max_step_cls = 1
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.
