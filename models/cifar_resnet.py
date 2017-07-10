@@ -153,6 +153,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
     x = tf.layers.conv2d_transpose(x, 3, 4, 2, padding='same',
             kernel_initializer=init_kernel,
             name='tconv4')
-    x = (tf.tanh(x, name='tconv4/tanh')+1)/2
+
+    x = (tf.tanh(x, name='tconv4/tanh') + 1.0)/2
 
     return x
