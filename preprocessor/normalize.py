@@ -12,7 +12,7 @@ def apply(inp):
     You may create or remove elements from the batch as necessary.
     """
     img, label = inp
-    # return (img.astype(np.float32)/127.5 - 1.0, label)
+    #return (img.astype(np.float32)/127.5 - 1.0, label)
     return (img.astype(np.float32)/255.0, label)
 
 apply_test = apply

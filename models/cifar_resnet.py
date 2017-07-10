@@ -2,6 +2,7 @@
 A simple model, containing both generator and discriminator.
 """
 import logging
+import numpy as np
 
 import tensorflow as tf
 
@@ -53,6 +54,25 @@ def _block_inner(x, shortcut, out_channel, strides, is_training):
     x = tf.layers.batch_normalization(x, training=is_training, name='bn_2')
     return leakyReLu(x + shortcut)
 
+#the inner minibatch operation
+def sigma(M):
+    return tf.reduce_sum(tf.exp(-tf.reduce_mean(tf.abs(M[:,:,:]-M[:,:,:]), axis=2)), axis=1, keep_dims=True)
+
+#matmul only supports 2D-matrix multiplication, I adapt it to 3D
+def tensor_vector_multiplication(T,x):
+    slices = []
+    for i in range(T.get_shape().as_list()[2]):
+        slices.append(tf.matmul(x,T[:,:,i]))
+    return tf.stack(slices,axis=1)
+
+#minibatch discrimination, based on OpenAI
+def minibatch_disrimination(x, dim1, dim2, dim3, training=True, name='minibatch_discrimination'):
+    with tf.variable_scope(name):
+        T = tf.get_variable('T', [dim1,dim2,dim3], tf.float32, tf.random_normal_initializer(mean = 0.001,stddev=0.02))
+        matrices = tensor_vector_multiplication(T,x)
+        sigma_x = sigma(matrices)
+        batch_x = tf.concat([x,sigma_x],1)
+        return batch_x
 
 #
 # DISCRIMINATOR
@@ -76,26 +96,30 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 
     # conv3_x
     with tf.variable_scope('conv3'):
-        x = res_block_head(x, 128, 2, is_training=is_training, name='conv3_1')
+        x = res_block_head(x, 64, 2, is_training=is_training, name='conv3_1')
         x = res_block(x, is_training=is_training, name='conv3_2')
     
     # conv4_x
     with tf.variable_scope('conv4'):
-        x = res_block_head(x, 256, 2, is_training=is_training, name='conv4_1')
+        x = res_block_head(x, 128, 2, is_training=is_training, name='conv4_1')
         x = res_block(x, is_training=is_training, name='conv4_2')
 
     # conv5_x
     with tf.variable_scope('conv5'):
-        x = res_block_head(x, 512, 2, is_training=is_training, name='conv5_1')
+        x = res_block_head(x, 256, 2, is_training=is_training, name='conv5_1')
         x = res_block(x, is_training=is_training, name='conv5_2')
     
     x = tf.contrib.layers.flatten(x)
+
+    #the 1st dimension of the tensor must be the same as the input data dimension
+    with tf.variable_scope('minibatch_discrimination'):
+        x = minibatch_disrimination(x, 256, 32, 32, training=is_training, name='minibatch_discrimination_1')
 
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
     with tf.variable_scope('discriminator'):
-        y1 = tf.layers.dense(x, 16, name='fc6',
+        y1 = tf.layers.dense(x, 32, name='fc6',
                              activation=leakyReLu,
                              kernel_initializer=init_kernel,
                              bias_initializer=init_bias)
@@ -153,8 +177,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
     x = tf.layers.conv2d_transpose(x, 3, 4, 2, padding='same',
             kernel_initializer=init_kernel,
             name='tconv4')
-    
-    # Normalize between 0 and 1:
+
     x = (tf.tanh(x, name='tconv4/tanh') + 1.0)/2
 
     return x

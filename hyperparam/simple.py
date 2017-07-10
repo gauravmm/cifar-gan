@@ -7,33 +7,45 @@ from support import MovingAverage
 SEED_DIM = (32,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
-BATCH_SIZE   = 16
+BATCH_SIZE   = 128
 LABELLED_FRACTION = 0.1
 WGAN_ENABLE = False
-WEIGHT_DECAY = 0.01
+WEIGHT_DECAY = 0.000025
 
-optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002, momentum=0.5)
-optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002, momentum=0.5)
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002, momentum=0.5)
+
+optimizer_gen = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
+optimizer_dis = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.5)
+
+
+#learning-rate adapting to the dataset size and decaying over time
+global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
+batches_per_epoch = int((NUM_CLASSES*5000*LABELLED_FRACTION)/BATCH_SIZE)
+values = [0.001,0.0001,0.00001]
+boundaries = [batches_per_epoch*80,batches_per_epoch*120]
+lr = tf.train.piecewise_constant(global_step, boundaries, values)
+
+#you can choose to put learning_rate=lr to use the adaptive learning rate schedule defined above
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.9)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
 
-loss_weights_generator = {'discriminator': 1.0, 'classifier': 0.0}
+loss_weights_generator = {'discriminator': 1.0, 'classifier': 1.0}
 loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 
 class HaltRelativeCorrectness(object):
     def __init__(self):
-        self.discriminator_correct = 0.81
-        self.generator_correct = 0.61
-        self.classifier_correct = 0.85
+        self.discriminator_correct = 0.61
+        self.generator_correct = 0.81
+        self.classifier_min_correct = 0.9
+        self.classifier_max_correct = 0.98
         self.min_step_dis = 1
-        self.max_step_dis = 50
+        self.max_step_dis = 1
         self.min_step_gen = 1
-        self.max_step_gen = 50
-        self.min_step_cls = 0
-        self.max_step_cls = 10
+        self.max_step_gen = 1
+        self.min_step_cls = 1
+        self.max_step_cls = 1
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.
@@ -63,8 +75,10 @@ class HaltRelativeCorrectness(object):
             return False
         if step + 1 >= self.max_step_cls:
             return True
-        if metrics["cls_accuracy"] < self.classifier_correct:
+        if metrics["cls_accuracy"] < self.classifier_min_correct:
             return False
+        if metrics["cls_accuracy"] > self.classifier_max_correct:
+            return True
         return True
 
 
