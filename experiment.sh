@@ -11,8 +11,8 @@ colorize python3 adversarial.py      \
     --hyperparam    simple           \
     --data          cifar10[shuffle] \
     --preprocessor  normalize        \
-    --generator     cifar_resnet     \
-    --discriminator cifar_resnet  \
+    --generator     cifar_openai     \
+    --discriminator cifar_openai  \
     --log-interval  60               \
     --batches      6250            \
     --only-classifier-after 5000      \

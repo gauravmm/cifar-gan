@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from support import MovingAverage
 
-SEED_DIM = (32,)
+SEED_DIM = (100,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
 BATCH_SIZE   = 128
@@ -25,7 +25,7 @@ boundaries = [batches_per_epoch*80,batches_per_epoch*120]
 lr = tf.train.piecewise_constant(global_step, boundaries, values)
 
 #you can choose to put learning_rate=lr to use the adaptive learning rate schedule defined above
-optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.001,momentum=0.9)
+optimizer_cls = tf.train.RMSPropOptimizer(learning_rate=0.0002,momentum=0.9)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
@@ -41,11 +41,11 @@ class HaltRelativeCorrectness(object):
         self.classifier_min_correct = 0.9
         self.classifier_max_correct = 0.98
         self.min_step_dis = 1
-        self.max_step_dis = 50
+        self.max_step_dis = 1
         self.min_step_gen = 1
-        self.max_step_gen = 50
-        self.min_step_cls = 0
-        self.max_step_cls = 10
+        self.max_step_gen = 1
+        self.min_step_cls = 1
+        self.max_step_cls = 1
 
     def discriminator_halt(self, batch, step, metrics):
         # Batch refers to the number of times the discriminator, then generator would be training.
