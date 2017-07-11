@@ -87,12 +87,19 @@ def discriminator(inp, is_training, num_classes, **kwargs):
         x = tf.leakyReLu(x)
         x = tf.layers.batch_normalization(x, training=is_training)
 
+    #network-in-network layers
     with tf.variable_scope('nin1'):
-        x = tf.layers.conv2d(x, 192, (1, 1), strides=(1, 1), padding="SAME", name="nin1",kernel_initializer=init_kernel,bias_initializer=init_bias)
+        x = tf.layers.conv2d(x, 9*192, (3, 3), strides=(1, 1), padding="SAME", name="nin1-1",kernel_initializer=init_kernel,bias_initializer=init_bias)
+        x = tf.leakyReLu(x)
+        x = tf.layers.batch_normalization(x, training=is_training)
+        x = tf.layers.conv2d(x, 192, (1, 1), strides=(1, 1), padding="SAME", name="nin1-2",kernel_initializer=init_kernel,bias_initializer=init_bias)
         x = tf.leakyReLu(x)
         x = tf.layers.batch_normalization(x, training=is_training)
     with tf.variable_scope('nin2'):
-        x = tf.layers.conv2d(x, 192, (1, 1), strides=(1, 1), padding="SAME", name="nin2",kernel_initializer=init_kernel,bias_initializer=init_bias)
+        x = tf.layers.conv2d(x, 9*192, (3, 3), strides=(1, 1), padding="SAME", name="nin2-1",kernel_initializer=init_kernel,bias_initializer=init_bias)
+        x = tf.leakyReLu(x)
+        x = tf.layers.batch_normalization(x, training=is_training)
+        x = tf.layers.conv2d(x, 192, (1, 1), strides=(1, 1), padding="SAME", name="nin2-2",kernel_initializer=init_kernel,bias_initializer=init_bias)
         x = tf.leakyReLu(x)
         x = tf.layers.batch_normalization(x, training=is_training)
 
