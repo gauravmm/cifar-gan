@@ -1,5 +1,3 @@
-#!/bin/python3
-
 """
 Main CIFAR-GAN file.
 Handles the loading of data from ./data, models from ./models, training, and testing.
@@ -99,7 +97,7 @@ def run(args):
     # Build Model
     #
     
-    global_step = tf.get_variable("global_step",shape=())
+    global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
     is_training = tf.placeholder(tf.bool, shape=None, name='global_is_training')
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
@@ -120,7 +118,7 @@ def run(args):
         # Here we prepare the multiple different batch normalization functions.
         batch_norm = support.TFMultiFactory(support.BatchNormLayerFactory, ['real_', 'fake_'], scope=disc_scope)
         # Make sure that the generator and real images are the same size:
-        assert str(gen_output.get_shape()) == str(dis_input.get_shape())
+        #assert str(gen_output.get_shape()) == str(dis_input.get_shape())
         dis_output_real_dis, dis_output_real_cls = _wrap_update_ops(args.discriminator.discriminator,
             dis_input,
             is_training,
