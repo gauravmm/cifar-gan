@@ -1,3 +1,4 @@
+
 """
 Main CIFAR-GAN file.
 Handles the loading of data from ./data, models from ./models, training, and testing.
@@ -97,7 +98,7 @@ def run(args):
     # Build Model
     #
     
-    global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
+    global_step = tf.get_variable("global_step",shape=())
     is_training = tf.placeholder(tf.bool, shape=None, name='global_is_training')
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
@@ -121,7 +122,7 @@ def run(args):
         assert str(gen_output.get_shape()) == str(dis_input.get_shape())
         dis_output_real_dis, dis_output_real_cls = _wrap_update_ops(args.discriminator.discriminator,
             dis_input,
-            is_training, 
+            is_training,
             args.hyperparam.NUM_CLASSES,
             batch_norm=batch_norm)
 
@@ -255,10 +256,11 @@ def run(args):
     # Train ops
     with tf.name_scope('train_ops'):
         # These operations may be used in the future. For now, a combined train_dis handles the discriminator training
-        train_dis_fake = args.hyperparam.optimizer_dis. \
-                           minimize(dis_loss_fake, var_list=discriminator_variables)
-        train_dis_real = args.hyperparam.optimizer_dis. \
-                           minimize(dis_loss_real, var_list=discriminator_variables)
+        # train_dis_fake = args.hyperparam.optimizer_dis. \
+        #                    minimize(dis_loss_fake, var_list=discriminator_variables)
+        # train_dis_real = args.hyperparam.optimizer_dis. \
+        #                    minimize(dis_loss_real, var_list=discriminator_variables)
+
         train_dis = args.hyperparam.optimizer_dis. \
                             minimize(dis_loss_regularized, var_list=discriminator_variables)
         train_cls = args.hyperparam.optimizer_cls. \
@@ -396,7 +398,7 @@ def run(args):
             # Set up tensorboard logging:
             logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
 
-            batch = sess.run(global_step, feed_dict = {is_training: True})
+            batch = sess.run(global_step)
             logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
             logger.info("Starting training from batch {} to {}. Saving model every {}s.".format(batch, args.batches, args.log_interval))
 
@@ -446,7 +448,7 @@ def run(args):
 
                         # WGANs require weight clipping.
                         if args.hyperparam.WGAN_ENABLE:
-                            sess.run(wgan_dis_clip, feed_dict = {is_training: True})
+                            sess.run(wgan_dis_clip)
 
                         step_dis += 1
                         logwriter.add_summary(summ_dis, global_step=batch)
@@ -516,7 +518,7 @@ def run(args):
                 #
                 # That is the entire training algorithm.
                 #
-                batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen, is_training: True})
+                batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen})
                 logwriter.add_summary(summ_bal, global_step=batch)
 
     #
