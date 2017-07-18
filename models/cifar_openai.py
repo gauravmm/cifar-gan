@@ -82,7 +82,7 @@ def discriminator(inp, is_training, num_classes, **kwargs):
     with tf.variable_scope('nin2'):
         x = otw.nin(x, 192, name="nin2", init=True)
 
-    x = tf.layers.average_pooling2d(x,8,4)
+    x = tf.layers.average_pooling2d(x,5,4)
     x = tf.squeeze(x, [1,2])
     x = minibatch_disrimination(x, 192, 32, 32)
 
@@ -97,7 +97,7 @@ def discriminator(inp, is_training, num_classes, **kwargs):
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
         y2 = tf.layers.dropout(x,rate=0.5, training=is_training)
-        y2 = otw.dense(y2, num_classes, name='output_node_cls', init=True)
+        y2 = otw.dense(x, num_classes, name='output_node_cls', init=True)
 
     # Return (discriminator, classifier)
     return (y1, y2)
@@ -122,7 +122,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
 
     # Transposed convolution outputs [batch, 8, 8, 256]
     with tf.variable_scope('deconv1'):
-        W = tf.get_variable('W', [5,5,256,512], tf.float32, tf.random_normal_initializer(mean = 0.001,stddev=0.05))
+        W = tf.get_variable('W', [5,5,256,512], tf.float32, tf.random_normal_initializer(mean = 0.001,stddev=0.05))        
         batch_size = tf.shape(x)[0]
         output_shape = tf.stack([batch_size, tf.shape(x)[1]*2, tf.shape(x)[2]*2, 256])
         temp1 = x.get_shape().as_list()[1]
@@ -131,7 +131,7 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
         real_output_shape = tf.stack([batch_size, temp1*2, temp2*2, 256])
         x = tf.reshape(x, real_output_shape)
         x = tf.layers.batch_normalization(x, training=is_training, name='deconv1/batch_norm')
-        x = tf.nn.relu(x)       
+        x = tf.nn.relu(x)  
 
     # Transposed convolution outputs [batch, 16, 16, 128]
     with tf.variable_scope('deconv2'):
@@ -145,8 +145,6 @@ def generator(inp, is_training, inp_label, output_size, **kwargs):
         x = tf.reshape(x, real_output_shape)
         x = tf.layers.batch_normalization(x, training=is_training, name='deconv2/batch_norm')
         x = tf.nn.relu(x)    
-        print('deconv2')
-        print(x.get_shape())
 
     # Transposed convolution outputs [batch, 32, 32, 3]
     with tf.variable_scope('generator'):
