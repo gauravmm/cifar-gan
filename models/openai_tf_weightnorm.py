@@ -114,7 +114,7 @@ def get_vars_maybe_avg(var_names, ema, **kwargs):
         vars.append(get_var_maybe_avg(vn, ema, **kwargs))
     return vars
 
-def adam_updates(params, cost_or_grads, lr=0.001, mom1=0.9, mom2=0.999):
+def adam_updates(params, cost_or_grads, lr=0.0003, mom1=0.9, mom2=0.999):
     ''' Adam optimizer '''
     updates = []
     if type(cost_or_grads) is not list:
@@ -155,20 +155,18 @@ def dense(x, num_units, nonlinearity=None, init_scale=1., counters={}, init=Fals
     with tf.variable_scope(name):
         if init:
             # data based initialization of parameters
-            #V = tf.Variable(name='V', validate_shape=False, dtype=tf.float32, initializer=tf.random_normal([x.get_shape().as_list()[1],num_units], 0, 0.05), trainable=True)
             V = tf.Variable(name='V', dtype=tf.float32, initial_value=tf.random_normal([x.get_shape().as_list()[1],num_units], 0, 0.05), trainable=True)
             V_norm = tf.nn.l2_normalize(V.initialized_value(), [0])
             x_init = tf.matmul(x, V_norm)
             m_init, v_init = tf.nn.moments(x_init, [0])
             scale_init = init_scale/tf.sqrt(v_init + 1e-10)
-            #g = tf.get_variable('g', dtype=tf.float32, initializer=scale_init, trainable=True)
-            #b = tf.get_variable('b', dtype=tf.float32, initializer=-m_init*scale_init, trainable=True)
-            g = tf.Variable(name='g', dtype=tf.float32, initial_value=scale_init, trainable=True)
-            b = tf.Variable(name='b', dtype=tf.float32, initial_value=-m_init*scale_init, trainable=True)
+            g = tf.Variable(name='g', dtype=tf.float32, initial_value=0, trainable=True)
+            b = tf.Variable(name='b', dtype=tf.float32, initial_value=0, trainable=True)
+            tf.assign(g, scale_init, validate_shape=False)
+            tf.assign(b, -m_init*scale_init, validate_shape=False)
             x_init = tf.reshape(scale_init,[1,num_units])*(x_init-tf.reshape(m_init,[1,num_units]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
-            #print(type(x_init.get_shape()))
             return x_init
 
         else:
@@ -192,25 +190,18 @@ def conv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinea
     with tf.variable_scope(name):
         if init:
             # data based initialization of parameters
-            # V = tf.get_variable('V', filter_size+[int(x.get_shape()[-1]),num_filters], tf.float32, tf.random_normal_initializer(0, 0.05), trainable=True)
-            # V_norm = tf.nn.l2_normalize(V.initialized_value(), [0,1,2])
-            # x_init = tf.nn.conv2d(x, V_norm, [1]+stride+[1], pad)
-            # m_init, v_init = tf.nn.moments(x_init, [0,1,2])
-            # scale_init = init_scale/tf.sqrt(v_init + 1e-8)
-            # g = tf.get_variable('g', dtype=tf.float32, initializer=scale_init, trainable=True)
-            # b = tf.get_variable('b', dtype=tf.float32, initializer=-m_init*scale_init, trainable=True)
-            # x_init = tf.reshape(scale_init,[1,1,1,num_filters])*(x_init-tf.reshape(m_init,[1,1,1,num_filters]))
             V = tf.Variable(name='V', dtype=tf.float32, initial_value=tf.random_normal(filter_size+[x.get_shape().as_list()[-1],num_filters], 0, 0.05), trainable=True)
             V_norm = tf.nn.l2_normalize(V.initialized_value(), [0,1,2])
             x_init = tf.nn.conv2d(x, V_norm, [1]+stride+[1], pad)
             m_init, v_init = tf.nn.moments(x_init, [0,1,2])
             scale_init = init_scale/tf.sqrt(v_init + 1e-8)
-            g = tf.Variable(name='g', dtype=tf.float32, initial_value=scale_init, trainable=True)
-            b = tf.Variable(name='b', dtype=tf.float32, initial_value=-m_init*scale_init, trainable=True)
+            g = tf.Variable(name='g', dtype=tf.float32, initial_value=0, trainable=True)
+            b = tf.Variable(name='b', dtype=tf.float32, initial_value=0, trainable=True)
+            tf.assign(g, scale_init, validate_shape=False)
+            tf.assign(b, -m_init*scale_init, validate_shape=False)            
             x_init = tf.reshape(scale_init,[1,1,1,num_filters])*(x_init-tf.reshape(m_init,[1,1,1,num_filters]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
-            #print(type(x_init.get_shape()))
             return x_init
 
         else:
@@ -248,12 +239,13 @@ def deconv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlin
             x_init.set_shape([None]+target_shape[1:])
             m_init, v_init = tf.nn.moments(x_init, [0,1,2])
             scale_init = init_scale/tf.sqrt(v_init + 1e-8)
-            g = tf.Variable(name='g', dtype=tf.float32, initial_value=scale_init, trainable=True)
-            b = tf.Variable(name='b', dtype=tf.float32, initial_value=-m_init*scale_init, trainable=True)
+            g = tf.Variable(name='g', dtype=tf.float32, initial_value=0, trainable=True)
+            b = tf.Variable(name='b', dtype=tf.float32, initial_value=0, trainable=True)
+            tf.assign(g, scale_init, validate_shape=False)
+            tf.assign(b, -m_init*scale_init, validate_shape=False)
             x_init = tf.reshape(scale_init,[1,1,1,num_filters])*(x_init-tf.reshape(m_init,[1,1,1,num_filters]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
-            #print(type(x_init.get_shape()))
             return x_init
 
         else:
@@ -287,7 +279,6 @@ def nin(x, num_units, **kwargs):
     x = dense(x, num_units, **kwargs)
     real_output_shape = tf.stack([batch_size, temp1, temp2, num_units])
     x = tf.reshape(x, real_output_shape)
-    print(x.get_shape())
     return x
 
 ''' meta-layer consisting of multiple base layers '''

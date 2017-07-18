@@ -7,22 +7,24 @@ from support import MovingAverage
 SEED_DIM = (100,)
 IMAGE_DIM = (32, 32, 3)
 NUM_CLASSES = 10
-BATCH_SIZE   = 128
+BATCH_SIZE   = 100
 LABELLED_FRACTION = 0.1
 WGAN_ENABLE = False
 WEIGHT_DECAY = 0.000025
+LR_GEN = 0.0003
+LR_DIS = 0.0003
+LR_CLS = 0.0003
 
-
-optimizer_gen = tf.train.AdamOptimizer(learning_rate=0.0001)
-optimizer_dis = tf.train.AdamOptimizer(learning_rate=0.0001)
+optimizer_gen = tf.train.AdamOptimizer(learning_rate=LR_GEN)
+optimizer_dis = tf.train.AdamOptimizer(learning_rate=LR_DIS)
 
 #you can choose to put learning_rate=lr to use the adaptive learning rate schedule defined above
-optimizer_cls = tf.train.AdamOptimizer(learning_rate=0.0001)
+optimizer_cls = tf.train.AdamOptimizer(learning_rate=LR_CLS)
 
 label_flipping_prob = 0.1
 label_smoothing  = lambda is_real, sz: np.random.normal(0,0.1,size=sz)
 
-loss_weights_generator = {'discriminator': 1, 'classifier': 1}
+loss_weights_generator = {'discriminator': 1.0, 'classifier': 1.0}
 loss_weights_classifier = {'discriminator': 0.0, 'classifier': 1.0}
 
 
