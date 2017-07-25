@@ -10,15 +10,14 @@ NUM_CLASSES = 10
 BATCH_SIZE   = 100
 LABELLED_FRACTION = 0.1
 WGAN_ENABLE = False
-WEIGHT_DECAY = 0.000025
+WEIGHT_DECAY = 0.00005
 LR_GEN = 0.0003
 LR_DIS = 0.0003
 LR_CLS = 0.0003
+MOM1 = 0.5
 
 optimizer_gen = tf.train.AdamOptimizer(learning_rate=LR_GEN)
 optimizer_dis = tf.train.AdamOptimizer(learning_rate=LR_DIS)
-
-#you can choose to put learning_rate=lr to use the adaptive learning rate schedule defined above
 optimizer_cls = tf.train.AdamOptimizer(learning_rate=LR_CLS)
 
 label_flipping_prob = 0.1
@@ -36,8 +35,8 @@ class HaltRelativeCorrectness(object):
         self.classifier_max_correct = 0.98
         self.min_step_dis = 1
         self.max_step_dis = 1
-        self.min_step_gen = 1
-        self.max_step_gen = 1
+        self.min_step_gen = 2
+        self.max_step_gen = 2
         self.min_step_cls = 1
         self.max_step_cls = 1
 

@@ -1,5 +1,6 @@
+
 """
-Main CIFAR-GAN file.
+Main CIFAR-GAN file. Loss functions match the ones used by OpenAI
 Handles the loading of data from ./data, models from ./models, training, and testing.
 """
 
@@ -16,6 +17,8 @@ import numpy as np
 import config
 import support
 import tensorflow as tf
+
+from models import openai_tf_weightnorm as otw
 
 #
 # Init
@@ -97,14 +100,30 @@ def run(args):
     # Build Model
     #
     
-    global_step = tf.Variable(initial_value=0, name='global_step', trainable=False, dtype=tf.int32)
+    global_step = tf.Variable(initial_value=0, dtype=tf.int32, name='global_step', trainable=False)
     is_training = tf.placeholder(tf.bool, shape=None, name='global_is_training')
 
     gen_input_seed  = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.SEED_DIM), name="input_gen_seed")
     gen_input_class  = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_gen_class")
-    with tf.variable_scope('model_generator'):
-        gen_output = _wrap_update_ops(args.generator.generator, gen_input_seed, is_training, gen_input_class, args.hyperparam.IMAGE_DIM)
+    
+    with tf.variable_scope('model_generator') as gen_scope:
         
+        gen_output_init = _wrap_update_ops(args.generator.generator, 
+        gen_input_seed, 
+        is_training, 
+        gen_input_class, 
+        args.hyperparam.IMAGE_DIM,
+        init=True)
+
+        gen_scope.reuse_variables()
+
+        gen_output = _wrap_update_ops(args.generator.generator, 
+        gen_input_seed, 
+        is_training, 
+        gen_input_class, 
+        args.hyperparam.IMAGE_DIM,
+        init=False)
+
         # Sanity checking output
         if not str(gen_output.get_shape()) == _shape_str([None] + list(args.hyperparam.IMAGE_DIM)):
             logger.error("Generator output size is incorrect! Expected: {}, actual: {}".format(
@@ -116,35 +135,46 @@ def run(args):
     dis_class      = tf.placeholder(tf.float32, shape=(None, args.hyperparam.NUM_CLASSES), name="input_dis_class")
     with tf.variable_scope('model_discriminator') as disc_scope:
         # Here we prepare the multiple different batch normalization functions.
-        batch_norm = support.TFMultiFactory(support.BatchNormLayerFactory, ['real_', 'fake_'], scope=disc_scope)
         # Make sure that the generator and real images are the same size:
-        assert str(gen_output.get_shape()) == str(dis_input.get_shape())
-        dis_output_real_dis, dis_output_real_cls = _wrap_update_ops(args.discriminator.discriminator,
+        #assert str(gen_output.get_shape()) == str(dis_input.get_shape())
+        
+        dis_output_real_dis_init, dis_output_real_cls_init = _wrap_update_ops(args.discriminator.discriminator,
             dis_input,
-            is_training, 
+            is_training,
             args.hyperparam.NUM_CLASSES,
-            batch_norm=batch_norm)
+            init=True)
 
         disc_scope.reuse_variables()
-        batch_norm.reuse()
+
+        dis_output_real_dis, dis_output_real_cls = _wrap_update_ops(args.discriminator.discriminator,
+            dis_input,
+            is_training,
+            args.hyperparam.NUM_CLASSES,
+            init=False)
+
+        dis_output_fake_dis_init, dis_output_fake_cls_init = _wrap_update_ops(args.discriminator.discriminator,
+            gen_output,
+            is_training,
+            args.hyperparam.NUM_CLASSES,
+            init=True)
 
         dis_output_fake_dis, dis_output_fake_cls = _wrap_update_ops(args.discriminator.discriminator,
             gen_output,
             is_training,
             args.hyperparam.NUM_CLASSES,
-            batch_norm=batch_norm)
+            init=False)
 
         # Sanity checking output
-        if not str(dis_output_real_dis.get_shape()) == "(?,)" or \
-           not str(dis_output_real_dis.get_shape()) == "(?,)":
+        if not str(dis_output_real_dis.get_shape()) == "({},)".format(args.hyperparam.BATCH_SIZE) or \
+           not str(dis_output_fake_dis.get_shape()) == "({},)".format(args.hyperparam.BATCH_SIZE):
             logger.error("Discriminator dis (y1) output size is incorrect! Expected: {}, actual: {} and {}".format(
                 "(?,)",
                 str(dis_output_real_dis.get_shape()),
                 str(dis_output_real_dis.get_shape())))
             return
 
-        if not str(dis_output_real_cls.get_shape()) == _shape_str([None, args.hyperparam.NUM_CLASSES]) or \
-           not str(dis_output_fake_cls.get_shape()) == _shape_str([None, args.hyperparam.NUM_CLASSES]):
+        if not str(dis_output_real_cls.get_shape()) == _shape_str([args.hyperparam.BATCH_SIZE, args.hyperparam.NUM_CLASSES]) or \
+           not str(dis_output_fake_cls.get_shape()) == _shape_str([args.hyperparam.BATCH_SIZE, args.hyperparam.NUM_CLASSES]):
             logger.error("Discriminator cls (y2) output size is incorrect! Expected: {}, actual: {} and {}".format(
                 _shape_str([None]),
                 str(dis_output_real_cls.get_shape()),
@@ -152,19 +182,19 @@ def run(args):
             return
 
     # The TensorFlow / operation automatically coerces the output type to a float. See [here](https://www.tensorflow.org/versions/master/api_docs/python/tf/divide).
-    func_loss = tf.nn.sigmoid_cross_entropy_with_logits
+    func_loss = tf.nn.softplus
     #func_loss = lambda **kwargs: tf.nn.l2_loss(kwargs["labels"] - kwargs["logits"])
     count_fraction = lambda x: tf.reduce_mean(tf.cast(x, tf.float32))
     with tf.name_scope('metrics'):
         # Discriminator losses
         with tf.name_scope('dis_fake'):
             with tf.name_scope('loss'):
-                dis_loss_fake = tf.reduce_mean(func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
+                dis_loss_fake = tf.reduce_mean(func_loss(otw.log_sum_exp(dis_output_fake_dis)))
             with tf.name_scope('true_neg'):
                 train_dis_fake_true_neg = count_fraction(tf.greater_equal(dis_output_fake_dis, 0.5))
         with tf.name_scope('dis_real'):
             with tf.name_scope('loss'):
-                dis_loss_real = tf.reduce_mean(func_loss(labels=dis_label_real, logits=dis_output_real_dis))
+                dis_loss_real = tf.reduce_mean(func_loss(otw.log_sum_exp(dis_output_real_dis)))
             with tf.name_scope('true_pos'):
                 train_dis_real_true_pos = count_fraction(tf.less(dis_output_real_dis, 0.5))
 
@@ -173,7 +203,7 @@ def run(args):
         # Classifier loss
         with tf.name_scope('cls'):
             with tf.name_scope('dis'):
-                cls_loss_dis  = tf.reduce_mean(func_loss(labels=dis_label_real, logits=dis_output_real_dis))
+                cls_loss_dis  = tf.reduce_mean(func_loss(dis_output_real_dis))
             with tf.name_scope('cls'):
                 cls_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=dis_class, logits=dis_output_real_cls))
             cls_loss = args.hyperparam.loss_weights_classifier["discriminator"] * cls_loss_dis \
@@ -185,7 +215,7 @@ def run(args):
         # Generator loss
         with tf.name_scope('gen'):
             with tf.name_scope('dis'):
-                gen_loss_dis  = tf.reduce_mean(func_loss(labels=dis_label_real, logits=dis_output_fake_dis))
+                gen_loss_dis  = -tf.reduce_mean(func_loss(otw.log_sum_exp(dis_output_fake_dis)))
             with tf.name_scope('cls'):
                 gen_loss_cls  = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=gen_input_class, logits=dis_output_fake_cls))
             gen_loss = args.hyperparam.loss_weights_generator["discriminator"] * gen_loss_dis \
@@ -255,24 +285,20 @@ def run(args):
     # Train ops
     with tf.name_scope('train_ops'):
         # These operations may be used in the future. For now, a combined train_dis handles the discriminator training
-        train_dis_fake = args.hyperparam.optimizer_dis. \
-                           minimize(dis_loss_fake, var_list=discriminator_variables)
-        train_dis_real = args.hyperparam.optimizer_dis. \
-                           minimize(dis_loss_real, var_list=discriminator_variables)
-        train_dis = args.hyperparam.optimizer_dis. \
-                            minimize(dis_loss_regularized, var_list=discriminator_variables)
-        train_cls = args.hyperparam.optimizer_cls. \
-                            minimize(cls_loss_regularized, var_list=discriminator_variables)
-        train_gen = args.hyperparam.optimizer_gen. \
-                            minimize(gen_loss_regularized, var_list=generator_variables)
+        # train_dis_fake = args.hyperparam.optimizer_dis. \
+        #                    minimize(dis_loss_fake, var_list=discriminator_variables)
+        # train_dis_real = args.hyperparam.optimizer_dis. \
+        #                    minimize(dis_loss_real, var_list=discriminator_variables)
+
+        train_dis = otw.adam_updates(discriminator_variables, dis_loss_regularized, lr=args.hyperparam.LR_DIS, mom1=args.hyperparam.MOM1)
+        train_cls = otw.adam_updates(discriminator_variables, cls_loss_regularized, lr=args.hyperparam.LR_CLS, mom1=args.hyperparam.MOM1)
+        train_gen = otw.adam_updates(generator_variables, gen_loss_regularized, lr=args.hyperparam.LR_GEN, mom1=args.hyperparam.MOM1)
         
         if args.hyperparam.WGAN_ENABLE:
             logger.info("Building WGAN optimizer.")
             with tf.name_scope('wgan'):
-                train_dis = args.hyperparam.optimizer_dis. \
-                                    minimize(dis_loss_wgan, var_list=discriminator_variables)
-                train_gen = args.hyperparam.optimizer_dis. \
-                                    minimize(gen_loss_wgan, var_list=generator_variables)
+                train_dis = otw.adam_updates(discriminator_variables, dis_loss_wgan, lr=args.hyperparam.LR_DIS, mom1=args.hyperparam.MOM1)
+                train_gen = otw.adam_updates(generator_variables, gen_loss_wgan, lr=args.hyperparam.LR_GEN, mom1=args.hyperparam.MOM1)
                 logger.warn("There is no classifier implementation for WGAN. Ensure that `ENABLE_TRAINING_CLS` is False in your hyperparameter definitions.")
 
 
@@ -307,7 +333,7 @@ def run(args):
             if args.hyperparam.SUMMARIZE_MORE:
                 with tf.name_scope('debug'):        
                     tf.summary.histogram('label', dis_label_fake)
-                    tf.summary.histogram('crossentropy', func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
+                    #tf.summary.histogram('crossentropy', func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
                     tf.summary.histogram('pre_generator_output', gen_output)
                     tf.summary.image('generator_output', preproc.unapply(gen_output), max_outputs=32)
                     tf.summary.image('real_input', preproc.unapply(dis_input), max_outputs=32)
@@ -320,7 +346,7 @@ def run(args):
             if args.hyperparam.SUMMARIZE_MORE:
                 with tf.name_scope('debug'):        
                     tf.summary.histogram('label', dis_label_real)
-                    tf.summary.histogram('crossentropy', func_loss(labels=dis_label_real, logits=dis_output_real_dis))
+                    #tf.summary.histogram('crossentropy', func_loss(labels=dis_label_real, logits=dis_output_real_dis))
         
     with tf.name_scope('summary_classifier'):
         tf.summary.scalar('loss/cls', cls_loss_cls)
@@ -390,13 +416,18 @@ def run(args):
         data = support.TrainData(args, preproc)
 
         logger.info("Loading supervisor.")
-        sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval)
-        
+        sv = tf.train.Supervisor(logdir=config.get_filename(".", args), global_step=global_step, summary_op=None, save_model_secs=args.log_interval, 
+        init_feed_dict={is_training: True, gen_input_seed: next(data.rand_vec), gen_input_class: next(data.rand_label_vec),
+        dis_label_fake: next(data.label_dis_fake), dis_label_real: next(data.label_dis_real),
+        dis_input: next(data.labelled)[0], dis_class: next(data.labelled)[1]})
+
         with sv.managed_session() as sess:
+
             # Set up tensorboard logging:
             logwriter = tf.summary.FileWriter(config.get_filename(".", args), sess.graph)
 
-            batch = sess.run(global_step, feed_dict = {is_training: True})
+            logger.info('global step: {}'.format(global_step))
+            batch = sess.run(global_step)
             logwriter.add_session_log(tf.SessionLog(status=tf.SessionLog.START), global_step=batch)
             logger.info("Starting training from batch {} to {}. Saving model every {}s.".format(batch, args.batches, args.log_interval))
 
@@ -424,18 +455,23 @@ def run(args):
                             logger.warn("Starting from batch {}, only the classifier will be trained.".format(batch))
                             only_classifier = True
 
-                # This training proceeds in two phases: (1) discriminator, then (2) generator.
-                # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
-                # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
-                # distinguish between "fake"" (generated) and real images by running it on one step of each.                
-                step_dis = 0
-                if args.hyperparam.ENABLE_TRAINING_DIS and not only_classifier:
-                    while True:
+                if batch < 1:
+
+                    logger.info('Doing the data-based initialization with the first batch')
+
+                    # This training proceeds in two phases: (1) discriminator, then (2) generator.
+                    
+                    # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
+                    # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
+                    # distinguish between "fake"" (generated) and real images by running it on one step of each.                
+                    step_dis = 0
+                    if args.hyperparam.ENABLE_TRAINING_DIS and not only_classifier:
+                        
                         # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
                         # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
                         # same time so we can capture the summary op.
-                        _, (loss_fake, fake_true_neg, loss_real, real_true_pos), summ_dis = sess.run(
-                            [train_dis, (dis_loss_fake, train_dis_fake_true_neg, dis_loss_real, train_dis_real_true_pos), summary_dis], feed_dict={
+                        _ = sess.run(
+                            [dis_output_real_dis_init, dis_output_fake_dis_init], feed_dict={
                             gen_input_seed: next(data.rand_vec),
                             gen_input_class: next(data.rand_label_vec),
                             dis_label_fake: next(data.label_dis_fake),
@@ -446,78 +482,157 @@ def run(args):
 
                         # WGANs require weight clipping.
                         if args.hyperparam.WGAN_ENABLE:
-                            sess.run(wgan_dis_clip, feed_dict = {is_training: True})
+                            sess.run(wgan_dis_clip)
 
                         step_dis += 1
-                        logwriter.add_summary(summ_dis, global_step=batch)
-
-                        if args.hyperparam.discriminator_halt(batch, step_dis, 
-                            {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
-                            "real_loss": loss_real, "real_true_pos": real_true_pos}):
-                            break
-                
-                # Second, we train the classifier
-                step_cls = 0
-                if args.hyperparam.ENABLE_TRAINING_CLS:
-                    if args.hyperparam.WGAN_ENABLE:
-                        logger.error("Attempting to train a classifier with WGANs. I told you this wouldn\'t work, didn't I?")
-                        logger.error("How to resolve:")
-                        logger.error("    1) Set `ENABLE_TRAINING_CLS = False` in your hyperparam file to disable training the classifier.")
-                        logger.error("    2) Switch to a hyperparam file configured for normal GANs.")
-                        logger.error("    3) Figure out the theoretical challenges of training a classifier with Wasserstein distances, delve into the source code of this program, implement it, submit a pull request against git@github.com:gauravmm/cifar-gan.git:development, and write a paper about the process.")
-                        logger.error("    4) Wait for Gaurav to do (3).")
-                        
-                        raise RuntimeError('Training classifier with WGAN is unsupported.')
                     
-                    data_x, data_y = next(data.labelled)
-                    loss_label, accuracy, summ_cls = sess.run(
-                            [cls_loss, cls_accuracy, summary_cls], feed_dict={
-                            dis_input: data_x,
-                            dis_class: data_y,
-                            dis_label_real: next(data.label_dis_real),
-                            is_training: True
-                        })
-                    logwriter.add_summary(summ_cls, global_step=batch)
+                    # Second, we train the classifier
+                    step_cls = 0
+                    if args.hyperparam.ENABLE_TRAINING_CLS:
+                        if args.hyperparam.WGAN_ENABLE:
+                            logger.error("Attempting to train a classifier with WGANs. I told you this wouldn\'t work, didn't I?")
+                            logger.error("How to resolve:")
+                            logger.error("    1) Set `ENABLE_TRAINING_CLS = False` in your hyperparam file to disable training the classifier.")
+                            logger.error("    2) Switch to a hyperparam file configured for normal GANs.")
+                            logger.error("    3) Figure out the theoretical challenges of training a classifier with Wasserstein distances, delve into the source code of this program, implement it, submit a pull request against git@github.com:gauravmm/cifar-gan.git:development, and write a paper about the process.")
+                            logger.error("    4) Wait for Gaurav to do (3).")
+                            
+                            raise RuntimeError('Training classifier with WGAN is unsupported.')
+                        
+                        data_x, data_y = next(data.labelled)
+                        _ = sess.run(
+                                [dis_output_real_cls_init, dis_output_fake_cls_init], feed_dict={
+                                dis_input: data_x,
+                                dis_class: data_y,
+                                dis_label_real: next(data.label_dis_real),
+                                is_training: True
+                            })
 
-                    while not args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
-                        if step_cls > 0:
-                            data_x, data_y = next(data.labelled)
 
-                        _, loss_label, accuracy, summ_cls = sess.run(
-                            [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
-                            dis_input: data_x,
-                            dis_class: data_y,
-                            dis_label_real: next(data.label_dis_real),
-                            is_training: True
-                        })
-                        step_cls += 1
-                        logwriter.add_summary(summ_cls, global_step=batch)
+                    # Finally, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
+                    # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
+                    # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
+                    # vector, it classifies images as real.
+                    step_gen = 0
+                    if args.hyperparam.ENABLE_TRAINING_GEN and not only_classifier:
 
-                # Finally, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
-                # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
-                # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
-                # vector, it classifies images as real.
-                step_gen = 0
-                if args.hyperparam.ENABLE_TRAINING_GEN and not only_classifier:
-                    while True:
-                        _, loss, fooling_rate, summ_gen = sess.run(
-                            [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
+                        _ = sess.run(
+                            [gen_output_init], feed_dict={
                             gen_input_seed: next(data.rand_vec),
                             gen_input_class: next(data.rand_label_vec),
                             dis_label_real: next(data.label_gen_real),
                             is_training: True
                         })
                         step_gen += 1
-                        logwriter.add_summary(summ_gen, global_step=batch)
-                        
-                        if args.hyperparam.generator_halt(batch, step_gen, {"gen_loss": loss, "gen_fooling": fooling_rate}):
-                            break
+                            
 
-                #
-                # That is the entire training algorithm.
-                #
-                batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen, is_training: True})
-                logwriter.add_summary(summ_bal, global_step=batch)
+                    #
+                    # That is the entire training algorithm.
+                    #
+                    batch = sess.run(increment_global_step)
+
+                else:
+
+                    # This training proceeds in two phases: (1) discriminator, then (2) generator.
+                    
+                    # First, we train the discriminator for `step_dis` number of steps. Because the .trainable flag was True when 
+                    # `dis_model` was compiled, the weights of the discriminator will be updated. The discriminator is trained to
+                    # distinguish between "fake"" (generated) and real images by running it on one step of each.                
+                    step_dis = 0
+                    if args.hyperparam.ENABLE_TRAINING_DIS and not only_classifier:
+                        
+                        while True:
+                            
+                            # Generate fake images, and train the model to predict them as fake. We keep track of the loss in predicting
+                            # Use real images (but not labels), and train the model to predict them as real. We perform both these at the
+                            # same time so we can capture the summary op.
+                            _, (loss_fake, fake_true_neg, loss_real, real_true_pos), summ_dis = sess.run(
+                                [train_dis, (dis_loss_fake, train_dis_fake_true_neg, dis_loss_real, train_dis_real_true_pos), summary_dis], feed_dict={
+                                gen_input_seed: next(data.rand_vec),
+                                gen_input_class: next(data.rand_label_vec),
+                                dis_label_fake: next(data.label_dis_fake),
+                                dis_input: next(data.unlabelled)[0],
+                                dis_label_real: next(data.label_dis_real),
+                                is_training: True
+                            })
+
+                            # WGANs require weight clipping.
+                            if args.hyperparam.WGAN_ENABLE:
+                                sess.run(wgan_dis_clip)
+
+                            step_dis += 1
+                            logwriter.add_summary(summ_dis, global_step=batch)
+
+                            if args.hyperparam.discriminator_halt(batch, step_dis, 
+                                {"fake_loss": loss_fake, "fake_true_neg": fake_true_neg,
+                                "real_loss": loss_real, "real_true_pos": real_true_pos}):
+                                break
+                    
+                    # Second, we train the classifier
+                    step_cls = 0
+                    if args.hyperparam.ENABLE_TRAINING_CLS:
+                        if args.hyperparam.WGAN_ENABLE:
+                            logger.error("Attempting to train a classifier with WGANs. I told you this wouldn\'t work, didn't I?")
+                            logger.error("How to resolve:")
+                            logger.error("    1) Set `ENABLE_TRAINING_CLS = False` in your hyperparam file to disable training the classifier.")
+                            logger.error("    2) Switch to a hyperparam file configured for normal GANs.")
+                            logger.error("    3) Figure out the theoretical challenges of training a classifier with Wasserstein distances, delve into the source code of this program, implement it, submit a pull request against git@github.com:gauravmm/cifar-gan.git:development, and write a paper about the process.")
+                            logger.error("    4) Wait for Gaurav to do (3).")
+                            
+                            raise RuntimeError('Training classifier with WGAN is unsupported.')
+                        
+                        data_x, data_y = next(data.labelled)
+                        loss_label, accuracy, summ_cls = sess.run(
+                                [cls_loss, cls_accuracy, summary_cls], feed_dict={
+                                dis_input: data_x,
+                                dis_class: data_y,
+                                dis_label_real: next(data.label_dis_real),
+                                is_training: True
+                            })
+                        logwriter.add_summary(summ_cls, global_step=batch)
+
+                        while not args.hyperparam.classifier_halt(batch, step_cls, {"cls_loss": loss_label, "cls_accuracy": accuracy}):
+                            if step_cls > 0:
+                                data_x, data_y = next(data.labelled)
+
+                            _, loss_label, accuracy, summ_cls = sess.run(
+                                [train_cls, cls_loss, cls_accuracy, summary_cls], feed_dict={
+                                dis_input: data_x,
+                                dis_class: data_y,
+                                dis_label_real: next(data.label_dis_real),
+                                is_training: True
+                            })
+                            step_cls += 1
+                            logwriter.add_summary(summ_cls, global_step=batch)
+
+                    # Finally, we train the generator for `step_gen` number of steps. The generator weights are the only weights 
+                    # updated in this step. We train "generator" so that "discriminatsor(generator(random)) == real". 
+                    # Specifically, we compose `dis_model` onto `gen_model`, and train the combined model so that given a random
+                    # vector, it classifies images as real.
+                    step_gen = 0
+                    if args.hyperparam.ENABLE_TRAINING_GEN and not only_classifier:
+
+                        while True:
+                            _, loss, fooling_rate, summ_gen = sess.run(
+                                [train_gen, gen_loss, gen_fooling, summary_gen], feed_dict={
+                                gen_input_seed: next(data.rand_vec),
+                                gen_input_class: next(data.rand_label_vec),
+                                dis_label_real: next(data.label_gen_real),
+                                is_training: True
+                            })
+                            step_gen += 1
+                            logwriter.add_summary(summ_gen, global_step=batch)
+                            
+                            if args.hyperparam.generator_halt(batch, step_gen, {"gen_loss": loss, "gen_fooling": fooling_rate}):
+                                break
+
+                    #
+                    # That is the entire training algorithm.
+                    #
+                    batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen})
+                    logwriter.add_summary(summ_bal, global_step=batch)
+
+                logger.info('batch: {}'.format(batch))
 
     #
     # Testing
@@ -541,7 +656,7 @@ def run(args):
             for i, d in enumerate(data.labelled):
                 data_x, data_y = d
                 
-                v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x, is_training: False})
+                v = sess.run(dis_output_real_cls, feed_dict={dis_input: data_x, is_training: False, init:False})
                 
                 num += v.shape[0]
                 vp = np.argmax(v, axis=1)

@@ -1,3 +1,7 @@
+#OpenAI original implementation of their layers in tensorflow. 
+#It works only with a fiex batch size. 
+#I have added the minibatch-discrimination layer as well as the gaussian noise layer. 
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.framework.python.ops import add_arg_scope
@@ -14,8 +18,8 @@ def _leakyReLu_impl(x, alpha):
     return tf.nn.relu(x) - (alpha * tf.nn.relu(-x))
 
 def int_shape(x):
-    #return list(map(int, x.get_shape()))
-    return x.get_shape().as_list()
+    return list(map(int, x.get_shape()))
+    #return x.get_shape().as_list()
 
 def concat_elu(x):
     """ like concatenated ReLU (http://arxiv.org/abs/1603.05201), but then with ELU """
@@ -149,80 +153,72 @@ def get_name(layer_name, counters):
     return name
 
 @add_arg_scope
-def dense(x, num_units, nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, **kwargs):
+def dense(x, num_units, nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, wn=True, **kwargs):
     ''' fully connected layer '''
-    name = get_name('dense', counters)
+    name = 'dense'
     with tf.variable_scope(name):
         if init:
             # data based initialization of parameters
-            V = tf.Variable(name='V', dtype=tf.float32, initial_value=tf.random_normal([x.get_shape().as_list()[1],num_units], 0, 0.05), trainable=True)
+            V = tf.get_variable('V', [int(x.get_shape()[1]),num_units], tf.float32, tf.random_normal_initializer(0, 0.05), trainable=True)
             V_norm = tf.nn.l2_normalize(V.initialized_value(), [0])
             x_init = tf.matmul(x, V_norm)
             m_init, v_init = tf.nn.moments(x_init, [0])
             scale_init = init_scale/tf.sqrt(v_init + 1e-10)
-            g = tf.Variable(name='g', dtype=tf.float32, initial_value=0, trainable=True)
-            b = tf.Variable(name='b', dtype=tf.float32, initial_value=0, trainable=True)
-            tf.assign(g, scale_init, validate_shape=False)
-            tf.assign(b, -m_init*scale_init, validate_shape=False)
+            g = tf.get_variable('g', dtype=tf.float32, initializer=scale_init, trainable=True)
+            b = tf.get_variable('b', dtype=tf.float32, initializer=-m_init*scale_init, trainable=True)
             x_init = tf.reshape(scale_init,[1,num_units])*(x_init-tf.reshape(m_init,[1,num_units]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
             return x_init
-
         else:
             V,g,b = get_vars_maybe_avg(['V','g','b'], ema)
             tf.assert_variables_initialized([V,g,b])
-
             # use weight normalization (Salimans & Kingma, 2016)
             x = tf.matmul(x, V)
-            scaler = g/tf.sqrt(tf.reduce_sum(tf.square(V),[0]))
-            x = tf.reshape(scaler,[1,num_units])*x + tf.reshape(b,[1,num_units])
-
-            # apply nonlinearity
-            if nonlinearity is not None:
-                x = nonlinearity(x)
-            return x
+            if wn==False:
+                return x
+            else:
+                scaler = g/tf.sqrt(tf.reduce_sum(tf.square(V),[0]))
+                x = tf.reshape(scaler,[1,num_units])*x + tf.reshape(b,[1,num_units])
+                # apply nonlinearity
+                if nonlinearity is not None:
+                    x = nonlinearity(x)
+                return x
 
 @add_arg_scope
 def conv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, **kwargs):
     ''' convolutional layer '''
-    name = get_name('conv2d', counters)
+    name = 'conv2d'
     with tf.variable_scope(name):
         if init:
             # data based initialization of parameters
-            V = tf.Variable(name='V', dtype=tf.float32, initial_value=tf.random_normal(filter_size+[x.get_shape().as_list()[-1],num_filters], 0, 0.05), trainable=True)
+            V = tf.get_variable('V', filter_size+[int(x.get_shape()[-1]),num_filters], tf.float32, tf.random_normal_initializer(0, 0.05), trainable=True)
             V_norm = tf.nn.l2_normalize(V.initialized_value(), [0,1,2])
             x_init = tf.nn.conv2d(x, V_norm, [1]+stride+[1], pad)
             m_init, v_init = tf.nn.moments(x_init, [0,1,2])
             scale_init = init_scale/tf.sqrt(v_init + 1e-8)
-            g = tf.Variable(name='g', dtype=tf.float32, initial_value=0, trainable=True)
-            b = tf.Variable(name='b', dtype=tf.float32, initial_value=0, trainable=True)
-            tf.assign(g, scale_init, validate_shape=False)
-            tf.assign(b, -m_init*scale_init, validate_shape=False)            
+            g = tf.get_variable('g', dtype=tf.float32, initializer=scale_init, trainable=True)
+            b = tf.get_variable('b', dtype=tf.float32, initializer=-m_init*scale_init, trainable=True)
             x_init = tf.reshape(scale_init,[1,1,1,num_filters])*(x_init-tf.reshape(m_init,[1,1,1,num_filters]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
             return x_init
-
         else:
             V, g, b = get_vars_maybe_avg(['V', 'g', 'b'], ema)
             tf.assert_variables_initialized([V,g,b])
-
             # use weight normalization (Salimans & Kingma, 2016)
             W = tf.reshape(g,[1,1,1,num_filters])*tf.nn.l2_normalize(V,[0,1,2])
-
             # calculate convolutional layer output
             x = tf.nn.bias_add(tf.nn.conv2d(x, W, [1]+stride+[1], pad), b)
-
             # apply nonlinearity
             if nonlinearity is not None:
                 x = nonlinearity(x)
             return x
 
 @add_arg_scope
-def deconv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, **kwargs):
+def deconv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlinearity=None, init_scale=1., counters={}, init=False, ema=None, wn=True, **kwargs):
     ''' transposed convolutional layer '''
-    name = get_name('deconv2d', counters)
+    name = 'deconv2d'
     xs = int_shape(x)
     if pad=='SAME':
         target_shape = [xs[0], xs[1]*stride[0], xs[2]*stride[1], num_filters]
@@ -231,55 +227,85 @@ def deconv2d(x, num_filters, filter_size=[3,3], stride=[1,1], pad='SAME', nonlin
     with tf.variable_scope(name):
         if init:
             # data based initialization of parameters
-            V = tf.Variable(name='V', dtype=tf.float32, initial_value=tf.random_normal(filter_size+[num_filters,int(x.get_shape()[-1])], 0, 0.05), trainable=True)
+            V = tf.get_variable('V', filter_size+[num_filters,int(x.get_shape()[-1])], tf.float32, tf.random_normal_initializer(0, 0.05), trainable=True)
             V_norm = tf.nn.l2_normalize(V.initialized_value(), [0,1,3])
-            batch_size = tf.shape(x)[0]
-            deconv_shape = tf.stack([batch_size]+target_shape[1:])
-            x_init = tf.nn.conv2d_transpose(x, V_norm, deconv_shape, [1]+stride+[1], padding=pad)
-            x_init.set_shape([None]+target_shape[1:])
+            x_init = tf.nn.conv2d_transpose(x, V_norm, target_shape, [1]+stride+[1], padding=pad)
             m_init, v_init = tf.nn.moments(x_init, [0,1,2])
             scale_init = init_scale/tf.sqrt(v_init + 1e-8)
-            g = tf.Variable(name='g', dtype=tf.float32, initial_value=0, trainable=True)
-            b = tf.Variable(name='b', dtype=tf.float32, initial_value=0, trainable=True)
-            tf.assign(g, scale_init, validate_shape=False)
-            tf.assign(b, -m_init*scale_init, validate_shape=False)
+            g = tf.get_variable('g', dtype=tf.float32, initializer=scale_init, trainable=True)
+            b = tf.get_variable('b', dtype=tf.float32, initializer=-m_init*scale_init, trainable=True)
             x_init = tf.reshape(scale_init,[1,1,1,num_filters])*(x_init-tf.reshape(m_init,[1,1,1,num_filters]))
             if nonlinearity is not None:
                 x_init = nonlinearity(x_init)
             return x_init
-
         else:
             V, g, b = get_vars_maybe_avg(['V', 'g', 'b'], ema)
             tf.assert_variables_initialized([V,g,b])
-
-            # use weight normalization (Salimans & Kingma, 2016)
-            W = tf.reshape(g,[1,1,num_filters,1])*tf.nn.l2_normalize(V,[0,1,3])
-
-            # calculate convolutional layer output
-            x = tf.nn.conv2d_transpose(x, W, target_shape, [1]+stride+[1], padding=pad)
-            x = tf.nn.bias_add(x, b)
-
-            # apply nonlinearity
-            if nonlinearity is not None:
-                x = nonlinearity(x)
-            return x
+            if wn == False:
+                W = tf.reshape(g,[1,1,num_filters,1])*V
+                x = tf.nn.conv2d_transpose(x, W, target_shape, [1]+stride+[1], padding=pad)
+                x = tf.nn.bias_add(x, b)
+                return x         
+            else:
+                # use weight normalization (Salimans & Kingma, 2016)
+                W = tf.reshape(g,[1,1,num_filters,1])*tf.nn.l2_normalize(V,[0,1,3])
+                # calculate convolutional layer output
+                x = tf.nn.conv2d_transpose(x, W, target_shape, [1]+stride+[1], padding=pad)
+                x = tf.nn.bias_add(x, b)
+                # apply nonlinearity
+                if nonlinearity is not None:
+                    x = nonlinearity(x)
+                return x
 
 @add_arg_scope
 def nin(x, num_units, **kwargs):
     """ a network in network layer (1x1 CONV) """
-    # s = int_shape(x)
-    # x = tf.reshape(x, [-1,s[-1]])
-    # x = dense(x, num_units, **kwargs)
-    # return tf.reshape(x, s[:-1]+[num_units])
-    s = x.get_shape().as_list()
-    batch_size = tf.shape(x)[0]
-    temp1 = s[1]
-    temp2 = s[2]
-    x = tf.reshape(x, [-1,s[-1]])
+    s = int_shape(x)
+    x = tf.reshape(x, [np.prod(s[:-1]),s[-1]])
     x = dense(x, num_units, **kwargs)
-    real_output_shape = tf.stack([batch_size, temp1, temp2, num_units])
-    x = tf.reshape(x, real_output_shape)
-    return x
+    return tf.reshape(x, s[:-1]+[num_units])
+
+
+''' my custom handmade layers '''
+
+#the inner minibatch operation
+@add_arg_scope
+def sigma(M, N, bs, dim2, dim3):
+    M.set_shape([bs,dim2,dim3])
+    N.set_shape([bs,dim2,dim3])
+    l = []
+    for i in range(bs):
+        l.append(tf.exp(-tf.reduce_mean(tf.abs(M[:,:,:]-N[i,:,:]), axis=2)))
+    stacked = tf.stack(l, axis=0)
+    stacked_summed = tf.reduce_sum(stacked, axis=1)
+    stacked_summed.set_shape([None,dim2])
+    return stacked_summed
+
+#matmul only supports 2D-matrix multiplication, I adapt it to 3D
+@add_arg_scope
+def tensor_vector_multiplication(T,x):
+    slices = []
+    for i in range(T.get_shape().as_list()[2]):
+        slices.append(tf.matmul(x,T[:,:,i]))
+    return tf.stack(slices,axis=1)
+
+#minibatch discrimination, based on OpenAI
+@add_arg_scope
+def minibatch_disrimination(x, dim1, dim2, dim3, ema=None, **kwargs):
+    name = 'minibatch-discr'
+    with tf.variable_scope(name):
+        T = tf.get_variable('T', [dim1,dim2,dim3], tf.float32, tf.random_normal_initializer(0.0001, 0.05), trainable=True)
+        matrices = tensor_vector_multiplication(T.initialized_value(),x)
+        bs = x.get_shape()[0]
+        sigma_x = sigma(matrices, matrices, bs, dim2, dim3)
+        batch_x = tf.concat([x,sigma_x],1)
+        return batch_x
+
+#layer that adds noise to the input
+def gaussian_noise_layer(input_layer, std):
+    noise = tf.random_normal(shape=tf.shape(input_layer), mean=0.0, stddev=std, dtype=tf.float32) 
+    return input_layer + noise
+
 
 ''' meta-layer consisting of multiple base layers '''
 
