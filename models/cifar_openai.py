@@ -1,5 +1,5 @@
 """
-A simple model, containing both generator and discriminator.
+The implementation in Tensorflow of OpenAI's GAN defined in the Improved techniques for training GANs paper (2016).
 """
 import logging
 
@@ -89,7 +89,7 @@ def discriminator(inp, is_training, num_classes, init, **kwargs):
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
         with tf.variable_scope('dropout'):
-            y2 = tf.layers.dropout(x,rate=0.5, training=is_training)
+            y2 = tf.layers.dropout(x, rate=0.7, training=is_training)
         with tf.variable_scope('classifier_output'):
             y2 = otw.dense(x, num_classes, name='classifier_output', nonlinearity=None, init=init)
 
@@ -102,9 +102,8 @@ def discriminator(inp, is_training, num_classes, init, **kwargs):
 #
 def generator(inp, is_training, inp_label, output_size, init, **kwargs):
     # We only allow the discriminator model to work on CIFAR-sized data.
-    assert output_size == (32, 32, 3)
+    assert output_size == simple.IMAGE_DIM
     
-    print(inp.get_shape())
     # [batch_size, init_z + init_label]
     x = tf.concat([tf.contrib.layers.flatten(inp), tf.contrib.layers.flatten(inp_label)], 1)
 

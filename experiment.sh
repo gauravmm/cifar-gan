@@ -14,7 +14,7 @@ colorize python3 adversarial_openai.py      \
     --generator     cifar_openai     \
     --discriminator cifar_openai     \
     --log-interval  60               \
-    --batches      6250              \
+    --batches      5000              \
     --only-classifier-after 5000     \
     train
 

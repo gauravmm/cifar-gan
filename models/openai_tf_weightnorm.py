@@ -1,5 +1,5 @@
 #OpenAI original implementation of their layers in tensorflow. 
-#It works only with a fiex batch size. 
+#It works only with a fixed batch size. 
 #I have added the minibatch-discrimination layer as well as the gaussian noise layer. 
 
 import numpy as np

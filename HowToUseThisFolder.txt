@@ -1,0 +1,33 @@
+Here we briefly describe how this folder is organized, and what each script does.
+
+
+The only file to run is experiment.sh
+
+It calls a main script, adversarial.py (or adversarial_openai.py if you want to use the OpenAI structure), that takes care
+of all the training procedure. 
+
+Training means calling a model, 2 models actually because we have both a generator and a discriminator. In front of the "generator"
+and "discriminator" arguments, is the name of the script where these networks are defined. 4 options here:
+_simple_model: a very basic CNN-based GAN
+_cifar_resnet: G is copied from the DCGANs paper, while D is inspired from ResNet-18
+_cifar_openai: we use the exact same architecture as OpenAI in their Improved Techniques for Training GANs paper
+This model also makes use of an annex script called "openai_tf_weightnorm.py" which contains all the OpenAI's tricks and custom layers
+_nodule_model: a 3D version of cifar_resnet, to train on nodules
+NB: you can call models from 2 different scripts, although it is not guaranteed that training will work
+
+You need to specify a dataset after "data". Default is CIFAR-10 ("cifar10")
+
+The "normalize.py" file in the preprocessor/ folder is the only file doing data pre-training processing for CIFAR-10. There's another file for
+processing nodules.
+
+You need to specify a file containing all the training parameters (batch-size, learning rate, etc). 4 choices here:
+_default: default parameters for GANs, to use with simple_model
+_simple: you MUST call this file when using OpenAI's architecture. Recommended for cifar_resnet as well.
+_simple_lungcancer: you MUST call this file if training GANs on nodules
+_wgan: the script to use if the WGAN option is activated. 
+
+Finally, running an experiment requires to manually set a log interval (how often do you want to log metrics), a number of iterations
+("batches"), and you have the option to only train the classifier after a certain number of iterations.
+
+NB: In the main directory, there is also a file named "support.py" containing functions and classes used in the main script (aka adversarial.py 
+or adversarial_openai.py). 

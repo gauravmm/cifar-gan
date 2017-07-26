@@ -125,9 +125,9 @@ def run(args):
         init=False)
 
         # Sanity checking output
-        if not str(gen_output.get_shape().as_list()[1:]) == _shape_str(list(args.hyperparam.IMAGE_DIM)):
+        if not str(gen_output.get_shape().as_list()[1:]) == str(list(args.hyperparam.IMAGE_DIM)):
             logger.error("Generator output size is incorrect! Expected: {}, actual: {}".format(
-                    _shape_str(list(args.hyperparam.IMAGE_DIM)), str(gen_output.get_shape().as_list()[1:])))
+                    str(list(args.hyperparam.IMAGE_DIM)), str(gen_output.get_shape().as_list()[1:])))
 
     dis_input      = tf.placeholder(tf.float32, shape=[None] + list(args.hyperparam.IMAGE_DIM), name="input_dis_image")
     dis_label_real = tf.placeholder(tf.float32, shape=[None], name="input_dis_label_real")
@@ -335,8 +335,8 @@ def run(args):
                     tf.summary.histogram('label', dis_label_fake)
                     tf.summary.histogram('crossentropy', func_loss(labels=dis_label_fake, logits=dis_output_fake_dis))
                     tf.summary.histogram('pre_generator_output', gen_output)
-                    tf.summary.image('generator_output', preproc.unapply(gen_output), max_outputs=32)
-                    tf.summary.image('real_input', preproc.unapply(dis_input), max_outputs=32)
+                    tf.summary.image('generator_output', preproc.unapply(gen_output), max_outputs=args.hyperparam.IMAGE_DIM[0])
+                    tf.summary.image('real_input', preproc.unapply(dis_input), max_outputs=args.hyperparam.IMAGE_DIM[0])
 
         with tf.name_scope('real'):
             tf.summary.scalar('loss', dis_loss_real)
@@ -357,7 +357,7 @@ def run(args):
         tf.summary.histogram('label_predicted', tf.argmax(dis_output_real_cls, 1))
 
     with tf.name_scope('summary_generator'):
-        tf.summary.image('output', preproc.unapply(gen_output), max_outputs=32)
+        tf.summary.image('output', preproc.unapply(gen_output), max_outputs=args.hyperparam.IMAGE_DIM[0])
         tf.summary.scalar('loss/cls', gen_loss_cls)
         tf.summary.scalar('loss/dis', gen_loss_dis)
         tf.summary.scalar('loss', gen_loss)
@@ -637,8 +637,9 @@ def run(args):
                     #
                     batch, summ_bal, _ = sess.run((increment_global_step, summary_bal, (log_step_dis_assign, log_step_gen_assign, log_step_cls_assign)),feed_dict={log_step_cls_val: step_cls, log_step_dis_val: step_dis, log_step_gen_val: step_gen})
                     logwriter.add_summary(summ_bal, global_step=batch)
-
-                logger.info('batch: {}'.format(batch))
+                
+                if (batch % 100) == 0:
+                    logger.info('batch: {}'.format(batch))
 
     #
     # Testing
