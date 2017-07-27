@@ -1,0 +1,17 @@
+So what is this folder used for ?
+
+Well, we have created a new GANs architecture that includes an image classifier. Thus, there are 3 networks.
+We are trying to do efficient semi-supervised learning. With few labels, still manage to train an accurate classifier.
+You can control the ratio of used labels in the hyperparameters file via "LABELLED_FRACTION"
+
+Our main difficulty as of late July is that the classifier overfits. We reach a high training accuracy but testing accuracy quickly flattens.
+
+A few ideas to prevent that:
+-early stopping
+-separate the classifier from the discriminator early, in order to have a small classifier
+-more dropout
+-more weight-decay
+-lighten the shared discriminator structure
+-...
+
+Once this is fixed, one should vary the LABELLED FRACTION and note down testing accuracy, then plot the curve.

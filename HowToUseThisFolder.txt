@@ -16,6 +16,7 @@ _nodule_model: a 3D version of cifar_resnet, to train on nodules
 NB: you can call models from 2 different scripts, although it is not guaranteed that training will work
 
 You need to specify a dataset after "data". Default is CIFAR-10 ("cifar10")
+NB: the first time you run the script, it is going to automatically download the data.
 
 The "normalize.py" file in the preprocessor/ folder is the only file doing data pre-training processing for CIFAR-10. There's another file for
 processing nodules.
@@ -26,8 +27,12 @@ _simple: you MUST call this file when using OpenAI's architecture. Recommended f
 _simple_lungcancer: you MUST call this file if training GANs on nodules
 _wgan: the script to use if the WGAN option is activated. 
 
-Finally, running an experiment requires to manually set a log interval (how often do you want to log metrics), a number of iterations
+Running an experiment also requires to manually set a log interval (how often do you want to log metrics), a number of iterations
 ("batches"), and you have the option to only train the classifier after a certain number of iterations.
+At the end of the file you need to precise if you want to train or test. 
+
+Finally, you can set the name of the training logs directory in the "config.py" file. The folder will contain all 
+the data for needed for nice Tensorboard visualization.
 
 NB: In the main directory, there is also a file named "support.py" containing functions and classes used in the main script (aka adversarial.py 
 or adversarial_openai.py). 
