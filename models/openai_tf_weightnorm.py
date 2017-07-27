@@ -1,4 +1,4 @@
-#OpenAI original implementation of their layers in tensorflow. 
+#OpenAI original implementation of their layers in tensorflow, modified by Mathieu Ravaut.
 #It works only with a fixed batch size. 
 #I have added the minibatch-discrimination layer as well as the gaussian noise layer. 
 

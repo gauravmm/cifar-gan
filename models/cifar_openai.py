@@ -1,3 +1,6 @@
+#Written by Mathieu Ravaut
+
+
 """
 The implementation in Tensorflow of OpenAI's GAN defined in the Improved techniques for training GANs paper (2016).
 """
