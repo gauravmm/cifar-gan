@@ -45,7 +45,7 @@ def discriminator(inp, is_training, num_classes, init, **kwargs):
     with tf.variable_scope('conv3'):
         x = otw.conv2d(x, 96, nonlinearity=leakyReLu, stride=[2,2], name = "conv3", init=init)
 
-    x = tf.layers.dropout(x, 0.5)
+    x = tf.layers.dropout(x, 0.5, training=is_training)
 
     with tf.variable_scope('conv4'):
         x = otw.conv2d(x, 192, nonlinearity=leakyReLu, name = "conv4", init=init)
@@ -54,7 +54,7 @@ def discriminator(inp, is_training, num_classes, init, **kwargs):
     with tf.variable_scope('conv6'):
         x = otw.conv2d(x, 192, nonlinearity=leakyReLu, stride=[2,2], name = "conv6", init=init)
 
-    x = tf.layers.dropout(x, 0.5)
+    x = tf.layers.dropout(x, 0.5, training=is_training)
 
     with tf.variable_scope('conv7'):
         x = otw.conv2d(x, 192, nonlinearity=leakyReLu, name = "conv7", init=init)
@@ -89,9 +89,9 @@ def discriminator(inp, is_training, num_classes, init, **kwargs):
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
         with tf.variable_scope('dropout'):
-            y2 = tf.layers.dropout(x, rate=0.7, training=is_training)
+            y2 = tf.layers.dropout(x, rate=0.5, training=is_training)
         with tf.variable_scope('classifier_output'):
-            y2 = otw.dense(x, num_classes, name='classifier_output', nonlinearity=None, init=init)
+            y2 = otw.dense(y2, num_classes, name='classifier_output', nonlinearity=None, init=init)
 
     # Return (discriminator, classifier)
     return (y1, y2)

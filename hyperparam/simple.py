@@ -11,7 +11,7 @@ NUM_CLASSES = 10
 BATCH_SIZE   = 100
 LABELLED_FRACTION = 0.1 #percentage of labels of the training dataset that we actually use
 WGAN_ENABLE = False #do you want to use Wasserstrein GANs ?
-WEIGHT_DECAY = 0.00005
+WEIGHT_DECAY = 0.0001
 LR_GEN = 0.0003 #learning rate of the Generator
 LR_DIS = 0.0003 #learning rate of the Discriminator
 LR_CLS = 0.0003 #learning rate of the Classifier
@@ -42,8 +42,8 @@ class HaltRelativeCorrectness(object):
         self.classifier_max_correct = 0.98 #maximum accuracy that C must not get above of (#overfitting)
         self.min_step_dis = 1 #minimum number of steps to train D for at each iteration
         self.max_step_dis = 1 #maximum number of steps to train D for at each iteration
-        self.min_step_gen = 2 #minimum number of steps to train G for at each iteration 
-        self.max_step_gen = 2 #maximum number of steps to train G for at each iteration
+        self.min_step_gen = 1 #minimum number of steps to train G for at each iteration 
+        self.max_step_gen = 1 #maximum number of steps to train G for at each iteration
         self.min_step_cls = 1 #minimum number of steps to train C for at each iteration
         self.max_step_cls = 1 #maximum number of steps to train C for at each iteration
 
