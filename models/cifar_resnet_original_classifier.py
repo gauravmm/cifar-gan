@@ -1,5 +1,6 @@
 """
-A simple model, containing both generator and discriminator.
+Same as cifar_resnet_original.py but the end of D and C is adapted to only train a good C.
+This Resnet can achieve 80% accuracy when trained in a supervised way, and without data augmentation.
 """
 import logging
 
@@ -61,51 +62,56 @@ def discriminator(inp, is_training, num_classes, **kwargs):
     x = inp
 
     with tf.variable_scope('conv1'):
-        x = tf.layers.conv2d(x, 64, (7, 7), strides=(2, 2), padding="SAME", name="c2d2", 
+        x = tf.layers.conv2d(x, 16, (3, 3), strides=(1, 1), padding="SAME", name="c2d2", 
                                    kernel_initializer=init_kernel,
                                    bias_initializer=init_bias)
 
         x = tf.layers.batch_normalization(x, training=is_training)
         x = leakyReLu(x)
-        x = tf.nn.max_pool(x, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
+        #x = tf.nn.max_pool(x, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
     
     # conv2_x
     with tf.variable_scope('conv2'):
-        x = res_block(x, is_training=is_training, name='conv2_1')
+        x = res_block_head(x, 16, 1, is_training=is_training, name='conv2_1')
         x = res_block(x, is_training=is_training, name='conv2_2')
+        x = res_block(x, is_training=is_training, name='conv2_3')
 
     # conv3_x
     with tf.variable_scope('conv3'):
-        x = res_block_head(x, 128, 2, is_training=is_training, name='conv3_1')
+        x = res_block_head(x, 32, 2, is_training=is_training, name='conv3_1')
         x = res_block(x, is_training=is_training, name='conv3_2')
-    
+        x = res_block(x, is_training=is_training, name='conv3_3')
+
     # conv4_x
     with tf.variable_scope('conv4'):
-        x = res_block_head(x, 256, 2, is_training=is_training, name='conv4_1')
+        x = res_block_head(x, 64, 2, is_training=is_training, name='conv4_1')
         x = res_block(x, is_training=is_training, name='conv4_2')
-
-    # conv5_x
-    with tf.variable_scope('conv5'):
-        x = res_block_head(x, 512, 2, is_training=is_training, name='conv5_1')
-        x = res_block(x, is_training=is_training, name='conv5_2')
+        x = res_block(x, is_training=is_training, name='conv4_3')
     
-    x = tf.contrib.layers.flatten(x)
+    x = tf.layers.average_pooling2d(x,8,4)
 
     # The name parameters here are crucial!
     # The order of definition and inclusion in output is crucial as well! You must define y1 before y2, and also include
     # them in output in the order.
     with tf.variable_scope('discriminator'):
-        y1 = tf.layers.dense(x, 16, name='fc6',
-                             activation=leakyReLu,
-                             kernel_initializer=init_kernel,
-                             bias_initializer=init_bias)
-
+        # with tf.variable_scope('conv6_dis'):
+        #     y1 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
+        #     y1 = res_block(y1, is_training=is_training, name='conv6_2')  
+        # y1 = tf.layers.average_pooling2d(y1,8,4)
+        y1 = tf.contrib.layers.flatten(x)
+        y1 = tf.layers.dense(y1, 32, name='fc6',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
         y1 = tf.layers.dense(y1, 1, name="fc7")
         y1 = tf.squeeze(y1, 1, name='output_node_dis')
 
     # Weights in scope `model_discriminator/classifier/*` are exempt from weight clipping if trained on WGANs.
     with tf.variable_scope('classifier'):
-        y2 = tf.layers.dropout(x,rate=0.5,training=is_training)
+        # with tf.variable_scope('conv6_cls'):
+        #     y2 = res_block_head(x, 128, 1, is_training=is_training, name='conv6_1')
+        #     y2 = res_block(y2, is_training=is_training, name='conv6_2') 
+        # y2 = tf.layers.average_pooling2d(y2,8,4)
+        y2 = tf.contrib.layers.flatten(x)
+        # y2 = tf.layers.dense(y2, 128, name='fc8',activation=leakyReLu,kernel_initializer=init_kernel,bias_initializer=init_bias)
+        # y2 = tf.layers.dropout(y2,rate=0.5,training=is_training)
         y2 = tf.layers.dense(y2, num_classes, name='output_node_cls')
 
     # Return (discriminator, classifier)
@@ -115,45 +121,4 @@ def discriminator(inp, is_training, num_classes, **kwargs):
 #
 # GENERATOR
 #
-def generator(inp, is_training, inp_label, output_size, **kwargs):
-    # We only allow the discriminator model to work on CIFAR-sized data.
-    assert output_size == (32, 32, 3)
-
-    # [batch_size, init_z + init_label]
-    x = tf.concat([tf.contrib.layers.flatten(inp), tf.contrib.layers.flatten(inp_label)], 1)
-
-    # [batch_size, 1, 1, init_*]
-    x = tf.expand_dims(tf.expand_dims(x, 1), 1)
-
-    # Transposed convolution outputs [batch, 4, 4, 1024]
-    x = tf.layers.conv2d_transpose(x, 1024, 4, padding='valid',
-            kernel_initializer=init_kernel,
-            name='tconv1')
-    
-    x = tf.layers.batch_normalization(x, training=is_training, name='tconv1/batch_normalization')
-    x = leakyReLu(x, name='tconv1/relu')
-        
-    # Transposed convolution outputs [batch, 8, 8, 256]
-    x = tf.layers.conv2d_transpose(x, 256, 4, 2, padding='same',
-            kernel_initializer=init_kernel,
-            name='tconv2')
-    
-    x = tf.layers.batch_normalization(x, training=is_training, name='tconv2/batch_normalization')
-    x = leakyReLu(x, name='tconv2/relu')
-        
-    # Transposed convolution outputs [batch, 16, 16, 64]
-    x = tf.layers.conv2d_transpose(x, 64, 4, 2, padding='same',
-            kernel_initializer=init_kernel,
-            name='tconv3')
-    
-    x = tf.layers.batch_normalization(x, training=is_training, name='tconv3/batch_normalization')
-    x = leakyReLu(x, name='tconv3/relu')
-        
-    # Transposed convolution outputs [batch, 32, 32, 3]
-    x = tf.layers.conv2d_transpose(x, 3, 4, 2, padding='same',
-            kernel_initializer=init_kernel,
-            name='tconv4')
-
-    x = (tf.tanh(x, name='tconv4/tanh') + 1.0)/2
-
-    return x
+#we don't care about the G here actually...

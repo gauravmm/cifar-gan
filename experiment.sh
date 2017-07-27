@@ -7,13 +7,14 @@ function colorize() (
 # Suppress info logs
 export TF_CPP_MIN_LOG_LEVEL=2
 
-colorize python3 adversarial.py      \
+colorize python3 adversarial_openai.py      \
     --hyperparam    simple           \
     --data          cifar10[shuffle] \
     --preprocessor  normalize        \
-    --generator     cifar_resnet     \
-    --discriminator cifar_resnet     \
-    --log-interval  600              \
-    --batches       10000            \
-    --only-classifier-after 8000     \
+    --generator     cifar_openai     \
+    --discriminator cifar_openai     \
+    --log-interval  60               \
+    --batches      7000              \
+    --only-classifier-after 7000     \
     train
+
